@@ -38,6 +38,11 @@
 -   提供一键开启/停止监控入口。
  ![](app_monitor/app/static/img/应用信息.png)
 
+### 2.1 📦 IPA & App Analysis
+-   **Build Technology**: detects Flutter, React Native, Unity, Cocos2d-x, Capacitor, Cordova, Xamarin/.NET, or an unconfirmed native iOS stack from runtime classes and framework signatures.
+-   **Bundle Inspection**: shows app metadata, embedded frameworks, extensions, and app-owned modules without creating an IPA.
+-   **Dump IPA**: optionally runs the local [`iDump`](https://github.com/Fi5t/iDump) binary and saves the resulting IPA under `app_monitor/artifacts/`. Install `idump` on `PATH`, or set `IOS_COMPLIANCE_IDUMP_BIN` to its executable path. The device must remain connected by USB with Frida Server running.
+
 ### 3. 📝 信息采集 (Privacy Monitor)
 重点监控 App 的敏感 API 调用，识别设备指纹收集行为：
 -   **IDFA / IDFV** (广告标识符/供应商标识符)

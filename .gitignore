@@ -2,5 +2,6 @@
 .vscode/
 __pycache__/
 app_monitor/node_modules/
+app_monitor/artifacts/
 tweak_monitor/.theos/
 tweak_monitor/packages/

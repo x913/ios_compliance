@@ -1,6 +1,7 @@
 import { state } from './state.js';
 import { UI } from './ui.js';
 import { Dashboard } from './dashboard.js';
+import { AppAnalysis } from './app-analysis.js';
 
 export const SocketClient = {
     init: () => {
@@ -52,6 +53,8 @@ export const SocketClient = {
                 const list = payload.data || [];
                 if (UI && UI.renderSDKList) UI.renderSDKList(list);
             });
+
+            socket.on('dump_status', (data) => AppAnalysis.handleDumpStatus(data));
 
             socket.on('sys_log', (data) => console.log("[System]", data.msg));
 

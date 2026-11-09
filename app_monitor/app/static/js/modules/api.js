@@ -19,6 +19,15 @@ async function get(endpoint) {
 
 export const API = {
     fetchApps: () => get('/apps'),
+
+    analyzeApp: (bundleId) => post('/analyze_app', { bundle_id: bundleId }),
+
+    getDumpToolStatus: () => get('/dump_tool_status'),
+
+    dumpIPA: (bundleId, appName) => post('/dump_ipa', {
+        bundle_id: bundleId,
+        app_name: appName
+    }),
     
     startMonitor: (bundleId) => post('/start_monitor', { bundle_id: bundleId }),
     

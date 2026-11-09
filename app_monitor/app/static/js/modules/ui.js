@@ -333,13 +333,18 @@ export const UI = {
                 ? `<img src="data:image/png;base64,${app.icon}" class="app-icon shadow-sm" style="width:40px;height:40px;border-radius:10px;">` 
                 : `<div style="width:40px;height:40px;background:#eee;border-radius:10px;"></div>`;
             const safeName = app.name.replace(/'/g, "\\'");
+            const safeBundleId = app.bundle_id.replace(/'/g, "\\'");
+            const safeVersion = app.version.replace(/'/g, "\\'");
             return `<tr>
                 <td class="text-center">${icon}</td>
                 <td class="fw-bold">${app.name}</td>
                 <td class="font-monospace small text-muted">${app.bundle_id}</td>
                 <td><span class="badge bg-light text-dark border">${app.version}</span></td>
                 <td class="text-end pe-4">
-                    <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="window.handleMonitor('${safeName}', '${app.bundle_id}')">📡 Start monitoring</button>
+                    <div class="d-inline-flex gap-2">
+                        <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="window.analyzeApp('${safeName}', '${safeBundleId}', '${safeVersion}')">🔬 Analyze</button>
+                        <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="window.handleMonitor('${safeName}', '${safeBundleId}')">📡 Start monitoring</button>
+                    </div>
                 </td>
             </tr>`;
         }).join('');

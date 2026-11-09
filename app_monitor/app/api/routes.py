@@ -1,5 +1,9 @@
-from flask import Blueprint, jsonify, request
+from pathlib import Path
+
+from flask import Blueprint, jsonify, request, send_from_directory
 from app import socketio
+from app.services.analysis_service import AppAnalysisService
+from app.services.dump_service import DumpService
 from app.services.frida_service import IOSDeviceService
 from app.services.monitor_service import MonitorService
 from app.services.tweak_service import TweakService
@@ -15,6 +19,63 @@ def get_apps():
         return jsonify({"status": "success", "data": apps})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def _require_idle_monitor():
+    if MonitorService.session:
+        return jsonify({
+            "status": "error",
+            "message": "Stop the active monitoring session before starting app analysis or an IPA dump."
+        }), 409
+    return None
+
+
+@api_bp.route('/analyze_app', methods=['POST'])
+def analyze_app():
+    idle_monitor_error = _require_idle_monitor()
+    if idle_monitor_error:
+        return idle_monitor_error
+
+    data = request.get_json(silent=True) or {}
+    bundle_id = data.get('bundle_id')
+    if not bundle_id:
+        return jsonify({"status": "error", "message": "Bundle ID is required"}), 400
+
+    try:
+        result = AppAnalysisService.analyze_app(bundle_id)
+        return jsonify({"status": "success", "data": result})
+    except Exception as error:
+        return jsonify({"status": "error", "message": str(error)}), 500
+
+
+@api_bp.route('/dump_tool_status', methods=['GET'])
+def dump_tool_status():
+    return jsonify({"status": "success", "data": DumpService.tool_status()})
+
+
+@api_bp.route('/dump_ipa', methods=['POST'])
+def dump_ipa():
+    idle_monitor_error = _require_idle_monitor()
+    if idle_monitor_error:
+        return idle_monitor_error
+
+    data = request.get_json(silent=True) or {}
+    bundle_id = data.get('bundle_id')
+    if not bundle_id:
+        return jsonify({"status": "error", "message": "Bundle ID is required"}), 400
+
+    try:
+        job = DumpService.start_dump(bundle_id, data.get('app_name', ''))
+        return jsonify({"status": "success", "data": job})
+    except Exception as error:
+        return jsonify({"status": "error", "message": str(error)}), 500
+
+
+@api_bp.route('/artifacts/<path:filename>', methods=['GET'])
+def download_artifact(filename):
+    if Path(filename).name != filename or not filename.endswith('.ipa'):
+        return jsonify({"status": "error", "message": "Artifact not found"}), 404
+    return send_from_directory(str(DumpService.artifact_dir()), filename, as_attachment=True)
 
 @api_bp.route('/start_monitor', methods=['POST'])
 def start_monitor():

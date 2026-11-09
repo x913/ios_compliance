@@ -1,6 +1,7 @@
 import { UI } from './modules/ui.js';
 import { SocketClient } from './modules/socket.js';
 import { Actions } from './modules/actions.js';
+import { AppAnalysis } from './modules/app-analysis.js';
 import { Dashboard } from './modules/dashboard.js';
 
 // 初始化
@@ -9,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     UI.initModals();
     Dashboard.init();
     SocketClient.init();
+    AppAnalysis.init();
 
     // 2. 绑定刷新按钮
     const refreshBtn = document.getElementById('refreshBtn');
@@ -44,6 +46,9 @@ window.clearInfoLogs = UI.clearAllLogs;
 window.showStackTrace = UI.showStackTrace;
 window.showNetworkDetail = UI.showNetworkDetail;
 window.showNetworkDetailById = UI.showNetworkDetailById;
+window.analyzeApp = AppAnalysis.selectApp;
+window.runAppAnalysis = AppAnalysis.run;
+window.dumpSelectedIPA = AppAnalysis.dump;
 
 // [辅助] 挂载行内展开 (如果你的UI还在用的话，虽然这里UI.js里用的是showStackTrace)
 window.toggleStackCell = (uid) => {
