@@ -175,6 +175,19 @@
                         </div>
 
                         <div class="card shadow-sm border-0 mb-3">
+                            <div class="card-header bg-white border-0 pt-3 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-1"><i class="bi bi-filetype-json me-2"></i>Info.plist</h5>
+                                    <small id="infoPlistNote" class="text-muted">Decoded directly from the installed app bundle.</small>
+                                </div>
+                                <span class="badge bg-primary">Bundle metadata</span>
+                            </div>
+                            <div class="card-body pt-2">
+                                <pre id="infoPlistContent" class="bg-light border rounded p-3 mb-0 small font-monospace" style="max-height: 380px; overflow: auto; white-space: pre-wrap;"></pre>
+                            </div>
+                        </div>
+
+                        <div class="card shadow-sm border-0 mb-3">
                             <div class="card-header bg-white border-0 pt-3"><h5 class="mb-0"><i class="bi bi-boxes me-2"></i>Loaded App Modules</h5></div>
                             <div class="table-responsive border-0" style="max-height: 260px;">
                                 <table class="table table-sm table-hover mb-0"><thead class="table-light sticky-top"><tr><th>Module</th><th>Path</th></tr></thead><tbody id="moduleBody"></tbody></table>
@@ -512,6 +525,31 @@
                                 overflow-y: auto;"></div>
                 </div>
                 <div class="modal-footer py-1">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="bundleFileModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content shadow">
+                <div class="modal-header bg-light py-2">
+                    <div class="me-3 overflow-hidden">
+                        <h6 class="modal-title fw-bold mb-0">📄 Bundle File</h6>
+                        <div id="bundleFilePath" class="small font-monospace text-muted text-break"></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="bundleFileMetadata" class="small text-muted mb-3"></div>
+                    <div id="bundleFileLoading" class="text-center py-4 d-none">
+                        <div class="spinner-border spinner-border-sm me-2" role="status"></div>Reading file from the device...
+                    </div>
+                    <div id="bundleFileMessage" class="alert alert-secondary d-none mb-0"></div>
+                    <pre id="bundleFileText" class="bg-light border rounded p-3 mb-0 small font-monospace d-none" style="max-height: 60vh; overflow: auto; white-space: pre-wrap;"></pre>
+                    <img id="bundleFileImage" class="img-fluid border rounded d-none" alt="Bundle file preview">
+                </div>
+                <div class="modal-footer py-2">
                     <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
                 </div>
             </div>

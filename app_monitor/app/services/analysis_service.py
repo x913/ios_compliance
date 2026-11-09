@@ -44,7 +44,7 @@ class AppAnalysisService:
             ) from error
 
     @classmethod
-    def analyze_app(cls, bundle_id):
+    def _run_agent_method(cls, bundle_id, method_name, *arguments, startup_delay=0):
         session = None
         script = None
         spawned = False
@@ -62,9 +62,9 @@ class AppAnalysisService:
                 device.resume(pid)
                 resumed = True
 
-            # Let app-owned frameworks finish their initial load before we enumerate them.
-            time.sleep(1)
-            return script.exports_sync.inspect()
+            if startup_delay:
+                time.sleep(startup_delay)
+            return getattr(script.exports_sync, method_name)(*arguments)
         except frida.ServerNotRunningError as error:
             raise RuntimeError("Frida Server is not running on the iPhone") from error
         except frida.InvalidArgumentError as error:
@@ -85,3 +85,12 @@ class AppAnalysisService:
                     session.detach()
                 except Exception:
                     pass
+
+    @classmethod
+    def analyze_app(cls, bundle_id):
+        # Let app-owned frameworks finish their initial load before we enumerate them.
+        return cls._run_agent_method(bundle_id, "inspect", startup_delay=1)
+
+    @classmethod
+    def read_bundle_file(cls, bundle_id, relative_path):
+        return cls._run_agent_method(bundle_id, "read_file", relative_path)

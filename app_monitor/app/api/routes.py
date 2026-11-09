@@ -48,6 +48,25 @@ def analyze_app():
         return jsonify({"status": "error", "message": str(error)}), 500
 
 
+@api_bp.route('/view_bundle_file', methods=['POST'])
+def view_bundle_file():
+    idle_monitor_error = _require_idle_monitor()
+    if idle_monitor_error:
+        return idle_monitor_error
+
+    data = request.get_json(silent=True) or {}
+    bundle_id = data.get('bundle_id')
+    relative_path = data.get('relative_path')
+    if not bundle_id or not relative_path:
+        return jsonify({"status": "error", "message": "Bundle ID and bundle-relative file path are required"}), 400
+
+    try:
+        result = AppAnalysisService.read_bundle_file(bundle_id, relative_path)
+        return jsonify({"status": "success", "data": result})
+    except Exception as error:
+        return jsonify({"status": "error", "message": str(error)}), 500
+
+
 @api_bp.route('/dump_tool_status', methods=['GET'])
 def dump_tool_status():
     return jsonify({"status": "success", "data": DumpService.tool_status()})

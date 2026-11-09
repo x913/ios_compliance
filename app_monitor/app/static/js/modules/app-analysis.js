@@ -3,6 +3,7 @@ import { state } from './state.js';
 import { UI } from './ui.js';
 
 let dumpToolAvailable = false;
+let bundleFileModal = null;
 
 function escapeHtml(value) {
     return String(value ?? '')
@@ -62,6 +63,27 @@ function renderList(elementId, entries, emptyText) {
     )).join('');
 }
 
+function fileButton(path) {
+    return `<button type="button" class="btn btn-link p-0 text-start font-monospace small text-break bundle-file-link" data-bundle-path="${escapeHtml(path)}">${escapeHtml(path)}</button>`;
+}
+
+function renderFileList(elementId, files, emptyText) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    if (!files || files.length === 0) {
+        element.innerHTML = `<li class="list-group-item text-muted small">${escapeHtml(emptyText)}</li>`;
+        return;
+    }
+
+    element.innerHTML = files.map((file) => (
+        `<li class="list-group-item small d-flex gap-2 align-items-start">
+            ${fileButton(file.path)}
+            <span class="text-muted text-nowrap ms-auto">${formatBytes(file.size)}</span>
+        </li>`
+    )).join('');
+}
+
 function renderFileInventory(inventory) {
     const data = inventory || {};
     const count = Number(data.file_count) || 0;
@@ -70,7 +92,7 @@ function renderFileInventory(inventory) {
     if (countBadge) countBadge.textContent = `${count.toLocaleString()} files`;
     if (note) {
         const indexed = Number(data.indexed_file_count) || 0;
-        note.textContent = data.error || `Showing ${indexed.toLocaleString()} of ${count.toLocaleString()} files alphabetically.`;
+        note.textContent = data.error || `Showing ${indexed.toLocaleString()} of ${count.toLocaleString()} files alphabetically. Click a file to preview it.`;
     }
 
     const largestBody = document.getElementById('largestFilesBody');
@@ -78,7 +100,7 @@ function renderFileInventory(inventory) {
         const largestFiles = data.largest_files || [];
         largestBody.innerHTML = largestFiles.length > 0
             ? largestFiles.map((file) => `<tr>
-                <td class="font-monospace small text-break">${escapeHtml(file.path)}</td>
+                <td>${fileButton(file.path)}</td>
                 <td class="text-end text-nowrap">${formatBytes(file.size)}</td>
             </tr>`).join('')
             : '<tr><td colspan="2" class="text-center text-muted py-3">No files found</td></tr>';
@@ -89,16 +111,111 @@ function renderFileInventory(inventory) {
         const files = data.files || [];
         indexBody.innerHTML = files.length > 0
             ? files.map((file) => `<tr>
-                <td class="font-monospace small text-break">${escapeHtml(file.path)}</td>
+                <td>${fileButton(file.path)}</td>
                 <td><span class="badge bg-light text-dark border text-capitalize">${escapeHtml(file.category)}</span></td>
                 <td class="text-end text-nowrap">${formatBytes(file.size)}</td>
             </tr>`).join('')
             : '<tr><td colspan="3" class="text-center text-muted py-3">No files found</td></tr>';
     }
 
-    const technologyFiles = (data.technology_files || []).map((file) => `${file.path} — ${formatBytes(file.size)}`);
-    renderList('technologyFileList', technologyFiles, 'No technology-specific file markers found');
+    renderFileList('technologyFileList', data.technology_files || [], 'No technology-specific file markers found');
     renderList('topLevelFileList', data.top_level_entries, 'No top-level entries found');
+}
+
+function renderInfoPlist(plist, error) {
+    const content = document.getElementById('infoPlistContent');
+    const note = document.getElementById('infoPlistNote');
+    if (!content || !note) return;
+
+    if (error) {
+        note.textContent = error;
+        content.textContent = 'Info.plist is unavailable.';
+        return;
+    }
+
+    note.textContent = 'Decoded directly from the installed app bundle.';
+    content.textContent = JSON.stringify(plist || {}, null, 2);
+}
+
+function viewerElements() {
+    return {
+        path: document.getElementById('bundleFilePath'),
+        metadata: document.getElementById('bundleFileMetadata'),
+        loading: document.getElementById('bundleFileLoading'),
+        message: document.getElementById('bundleFileMessage'),
+        text: document.getElementById('bundleFileText'),
+        image: document.getElementById('bundleFileImage')
+    };
+}
+
+function resetFileViewer(path, loading) {
+    const elements = viewerElements();
+    if (elements.path) elements.path.textContent = path;
+    if (elements.metadata) elements.metadata.textContent = '';
+    if (elements.loading) elements.loading.classList.toggle('d-none', !loading);
+    if (elements.message) {
+        elements.message.classList.add('d-none');
+        elements.message.textContent = '';
+    }
+    if (elements.text) {
+        elements.text.classList.add('d-none');
+        elements.text.textContent = '';
+    }
+    if (elements.image) {
+        elements.image.classList.add('d-none');
+        elements.image.removeAttribute('src');
+    }
+}
+
+function metadataText(data) {
+    const parts = [`${formatBytes(data.size)}${data.extension ? ` · .${data.extension}` : ''}`];
+    if (data.mach_o) {
+        parts.push(data.mach_o.format);
+        if (data.mach_o.architectures?.length) parts.push(data.mach_o.architectures.join(', '));
+    }
+    return parts.join(' · ');
+}
+
+async function viewBundleFile(path) {
+    const app = state.selectedAnalysisApp;
+    if (!app) return;
+
+    if (!bundleFileModal) {
+        const element = document.getElementById('bundleFileModal');
+        if (element) bundleFileModal = new bootstrap.Modal(element);
+    }
+    if (!bundleFileModal) return;
+
+    resetFileViewer(path, true);
+    bundleFileModal.show();
+
+    try {
+        const response = await API.viewBundleFile(app.bundleId, path);
+        if (response.status !== 'success') throw new Error(response.message);
+
+        const data = response.data || {};
+        const elements = viewerElements();
+        if (elements.loading) elements.loading.classList.add('d-none');
+        if (elements.metadata) elements.metadata.textContent = metadataText(data);
+
+        if (data.viewer_type === 'text' && elements.text) {
+            elements.text.textContent = data.content || '';
+            elements.text.classList.remove('d-none');
+        } else if (data.viewer_type === 'image' && elements.image) {
+            elements.image.src = `data:${data.mime_type};base64,${data.content_base64}`;
+            elements.image.classList.remove('d-none');
+        } else if (elements.message) {
+            elements.message.textContent = data.message || 'This file cannot be previewed.';
+            elements.message.classList.remove('d-none');
+        }
+    } catch (error) {
+        const elements = viewerElements();
+        if (elements.loading) elements.loading.classList.add('d-none');
+        if (elements.message) {
+            elements.message.textContent = `Could not read this file: ${error.message}`;
+            elements.message.classList.remove('d-none');
+        }
+    }
 }
 
 function renderAnalysis(data) {
@@ -152,6 +269,7 @@ function renderAnalysis(data) {
     renderList('frameworkList', inspection.embedded_frameworks, 'No embedded frameworks found');
     renderList('extensionList', inspection.app_extensions, 'No app extensions found');
     renderFileInventory(inventory);
+    renderInfoPlist(inspection.info_plist, inspection.info_plist_error);
 
     const moduleBody = document.getElementById('moduleBody');
     if (moduleBody) {
@@ -203,6 +321,10 @@ function renderDumpStatus(payload) {
 
 export const AppAnalysis = {
     init: async () => {
+        document.addEventListener('click', (event) => {
+            const button = event.target.closest('.bundle-file-link');
+            if (button?.dataset.bundlePath) viewBundleFile(button.dataset.bundlePath);
+        });
         try {
             const response = await API.getDumpToolStatus();
             if (response.status === 'success') setDumpToolStatus(response.data);

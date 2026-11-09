@@ -22,6 +22,11 @@ export const API = {
 
     analyzeApp: (bundleId) => post('/analyze_app', { bundle_id: bundleId }),
 
+    viewBundleFile: (bundleId, relativePath) => post('/view_bundle_file', {
+        bundle_id: bundleId,
+        relative_path: relativePath
+    }),
+
     getDumpToolStatus: () => get('/dump_tool_status'),
 
     dumpIPA: (bundleId, appName) => post('/dump_ipa', {

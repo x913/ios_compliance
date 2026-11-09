@@ -41,6 +41,18 @@ const TECHNOLOGY_RULES = [
 const MAX_FILE_INDEX_ENTRIES = 500;
 const MAX_LARGEST_FILES = 30;
 const MAX_TECHNOLOGY_FILES = 100;
+const MAX_VIEWABLE_FILE_BYTES = 1024 * 1024;
+const IMAGE_MIME_TYPES = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp"
+};
+const TEXT_EXTENSIONS = new Set([
+    "txt", "json", "xml", "html", "htm", "js", "mjs", "css", "svg", "yaml", "yml",
+    "strings", "md", "csv", "ini", "conf", "plist", "swift", "m", "mm", "h", "c", "cpp"
+]);
 
 function text(value, fallback = "") {
     if (value === null || value === undefined) return fallback;
@@ -79,6 +91,192 @@ function infoValue(info, key) {
 function numberValue(value) {
     const parsed = Number(text(value, "0"));
     return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function extensionForPath(path) {
+    const name = path.split("/").pop() || "";
+    const separator = name.lastIndexOf(".");
+    return separator >= 0 ? name.slice(separator + 1).toLowerCase() : "";
+}
+
+function fileAttributes(path) {
+    return ObjC.classes.NSFileManager.defaultManager().attributesOfItemAtPath_error_(path, NULL);
+}
+
+function safeBundleRelativePath(value) {
+    const relativePath = String(value || "");
+    if (!relativePath || relativePath.startsWith("/") || relativePath.includes("\\0")) {
+        throw new Error("A bundle-relative file path is required");
+    }
+
+    const components = relativePath.split("/");
+    if (components.some((component) => !component || component === "." || component === "..")) {
+        throw new Error("The requested path is outside the app bundle");
+    }
+    return relativePath;
+}
+
+function dataAsUtf8(data) {
+    const string = ObjC.classes.NSString.alloc().initWithData_encoding_(data, 4);
+    if (!string) throw new Error("The file is not valid UTF-8 text");
+    return text(string);
+}
+
+function readPropertyList(path) {
+    const dictionary = ObjC.classes.NSDictionary.dictionaryWithContentsOfFile_(path);
+    if (!dictionary) throw new Error("The property list could not be decoded");
+
+    const data = ObjC.classes.NSJSONSerialization.dataWithJSONObject_options_error_(dictionary, 1, NULL);
+    if (!data) throw new Error("The property list cannot be represented as JSON");
+    return JSON.parse(dataAsUtf8(data));
+}
+
+function readPrefix(path, length = 4096) {
+    const handle = ObjC.classes.NSFileHandle.fileHandleForReadingAtPath_(path);
+    if (!handle) return [];
+
+    try {
+        const data = handle.readDataOfLength_(length);
+        const dataLength = Number(data.length());
+        const bytes = [];
+        const pointer = data.bytes();
+        for (let index = 0; index < dataLength; index += 1) {
+            bytes.push(pointer.add(index).readU8());
+        }
+        return bytes;
+    } finally {
+        handle.closeFile();
+    }
+}
+
+function readUInt32(bytes, offset, littleEndian) {
+    if (bytes.length < offset + 4) return null;
+    if (littleEndian) {
+        return (bytes[offset]
+            + (bytes[offset + 1] * 0x100)
+            + (bytes[offset + 2] * 0x10000)
+            + (bytes[offset + 3] * 0x1000000)) >>> 0;
+    }
+    return ((bytes[offset] * 0x1000000)
+        + (bytes[offset + 1] * 0x10000)
+        + (bytes[offset + 2] * 0x100)
+        + bytes[offset + 3]) >>> 0;
+}
+
+function cpuName(cpuType) {
+    const names = {
+        7: "x86",
+        12: "arm",
+        18: "ppc",
+        0x01000007: "x86_64",
+        0x0100000c: "arm64",
+        0x01000012: "ppc64"
+    };
+    return names[cpuType] || `CPU type 0x${cpuType.toString(16)}`;
+}
+
+function machOMetadata(path) {
+    try {
+        const bytes = readPrefix(path);
+        if (bytes.length < 4) return null;
+        const magic = bytes.slice(0, 4).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+
+        const thinFormats = {
+            cffaedfe: { name: "Mach-O 64-bit", littleEndian: true },
+            cefaedfe: { name: "Mach-O 32-bit", littleEndian: true },
+            feedfacf: { name: "Mach-O 64-bit", littleEndian: false },
+            feedface: { name: "Mach-O 32-bit", littleEndian: false }
+        };
+        const thin = thinFormats[magic];
+        if (thin) {
+            const cpuType = readUInt32(bytes, 4, thin.littleEndian);
+            return {
+                format: thin.name,
+                architectures: cpuType === null ? [] : [cpuName(cpuType)]
+            };
+        }
+
+        const isFat = magic === "cafebabe" || magic === "cafebabf";
+        if (!isFat) return null;
+
+        const architectureCount = Math.min(readUInt32(bytes, 4, false) || 0, 8);
+        const entrySize = magic === "cafebabf" ? 32 : 20;
+        const architectures = [];
+        for (let index = 0; index < architectureCount; index += 1) {
+            const cpuType = readUInt32(bytes, 8 + index * entrySize, false);
+            if (cpuType !== null) architectures.push(cpuName(cpuType));
+        }
+        return {
+            format: "Universal (fat) Mach-O",
+            architectures: Array.from(new Set(architectures))
+        };
+    } catch (_) {
+        return null;
+    }
+}
+
+function inspectBundleFile(bundlePath, relativePath) {
+    const safePath = safeBundleRelativePath(relativePath);
+    const fullPath = `${bundlePath}/${safePath}`;
+    const attributes = fileAttributes(fullPath);
+    if (!attributes || text(attributes.objectForKey_("NSFileType")) !== "NSFileTypeRegular") {
+        throw new Error("The selected item is not a regular file in the app bundle");
+    }
+
+    const size = numberValue(attributes.objectForKey_("NSFileSize"));
+    const extension = extensionForPath(safePath);
+    const result = {
+        path: safePath,
+        size,
+        extension,
+        mach_o: machOMetadata(fullPath)
+    };
+
+    if (size > MAX_VIEWABLE_FILE_BYTES) {
+        return {
+            ...result,
+            viewer_type: "binary",
+            message: `Preview is limited to ${MAX_VIEWABLE_FILE_BYTES} bytes; this file is ${size} bytes.`
+        };
+    }
+
+    if (extension === "plist") {
+        return {
+            ...result,
+            viewer_type: "text",
+            language: "json",
+            content: JSON.stringify(readPropertyList(fullPath), null, 2)
+        };
+    }
+
+    const data = ObjC.classes.NSData.dataWithContentsOfFile_(fullPath);
+    if (!data) throw new Error("The file could not be read from the app bundle");
+
+    if (IMAGE_MIME_TYPES[extension]) {
+        return {
+            ...result,
+            viewer_type: "image",
+            mime_type: IMAGE_MIME_TYPES[extension],
+            content_base64: text(data.base64EncodedStringWithOptions_(0))
+        };
+    }
+
+    if (TEXT_EXTENSIONS.has(extension)) {
+        return {
+            ...result,
+            viewer_type: "text",
+            language: extension,
+            content: dataAsUtf8(data)
+        };
+    }
+
+    return {
+        ...result,
+        viewer_type: "binary",
+        message: result.mach_o
+            ? "Binary Mach-O metadata is available below."
+            : "This binary format is not previewed as text."
+    };
 }
 
 function fileCategory(relativePath, executableRelativePath) {
@@ -211,6 +409,14 @@ rpc.exports = {
         delete fileInventory._all_files;
         fileInventory.technology_files = technologyFiles(allFiles);
 
+        let infoPlist = null;
+        let infoPlistError = "";
+        try {
+            infoPlist = readPropertyList(`${bundlePath}/Info.plist`);
+        } catch (error) {
+            infoPlistError = `Info.plist could not be decoded: ${error}`;
+        }
+
         return {
             app: {
                 name: infoValue(info, "CFBundleDisplayName") || infoValue(info, "CFBundleName"),
@@ -225,8 +431,16 @@ rpc.exports = {
                 embedded_frameworks: frameworks,
                 app_extensions: plugins,
                 loaded_modules: loadedModules,
-                file_inventory: fileInventory
+                file_inventory: fileInventory,
+                info_plist: infoPlist,
+                info_plist_error: infoPlistError
             }
         };
+    },
+
+    read_file(relativePath) {
+        if (!ObjC.available) throw new Error("Objective-C runtime is not available in the target process");
+        const bundlePath = text(ObjC.classes.NSBundle.mainBundle().bundlePath());
+        return inspectBundleFile(bundlePath, relativePath);
     }
 };
