@@ -18,7 +18,7 @@ class TweakService:
             device = frida.get_usb_device(timeout=5)
             return device
         except Exception as e:
-            raise Exception(f"未检测到 USB 连接的 iOS 设备，请检查数据线连接: {e}")
+            raise Exception(f"No USB-connected iOS device detected. Check the cable connection: {e}")
 
     @staticmethod
     def _remove_tweak_files(ssh_client):
@@ -59,9 +59,9 @@ class TweakService:
             local_dylib = os.path.join(os.getcwd(), 'app/tweak_libs/MonitorTweak.dylib')
             
             if not os.path.exists(local_rules):
-                return False, "本地未找到 app/frida_scripts/ios_sdk_rules.json"
+                return False, "Missing local file: app/frida_scripts/ios_sdk_rules.json"
             if not os.path.exists(local_dylib):
-                return False, "本地未找到 app/tweak_libs/MonitorTweak.dylib，请先编译插件！"
+                return False, "Missing local file: app/tweak_libs/MonitorTweak.dylib. Build the Tweak first."
 
             # SSH 连接
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -108,18 +108,18 @@ class TweakService:
             exit_status = stdout.channel.recv_exit_status()
 
             if exit_status != 0:
-                raise Exception("文件传输校验失败：设备上未找到完整文件，请检查磁盘空间或读写权限。")
+                raise Exception("File-transfer validation failed. Check device storage and write permissions.")
             print("[*] 插件文件校验通过，准备启动应用...")
 
             # 通过 Frida 启动应用，使注入的dylib文件生效
             pid = device.spawn([bundle_id])
             device.resume(pid)
             
-            return True, f"插件部署并校验成功，应用已自动拉起 (PID: {pid})"
+            return True, f"Tweak deployed and validated; app started automatically (PID: {pid})"
 
         except Exception as e:
             print(f"[Deploy Error] {e}")
-            return False, f"部署失败: {str(e)}"
+            return False, f"Deployment failed: {str(e)}"
         finally:
             if sftp: sftp.close()
             ssh.close()
@@ -155,6 +155,6 @@ class TweakService:
             except Exception as kill_err:
                 print(f"[!] 尝试关闭应用时出错 (可能已关闭): {kill_err}")
 
-            return True, f"插件已移除，应用 {bundle_id} 已关闭"
+            return True, f"Tweak removed and app closed: {bundle_id}"
         except Exception as e:
-            return False, f"清理失败: {str(e)}"
+            return False, f"Cleanup failed: {str(e)}"

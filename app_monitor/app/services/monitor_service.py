@@ -65,12 +65,12 @@ class MonitorService:
             # all hooks, and only then resumes it so early app activity is not
             # missed.
             pid = device.spawn([bundle_id])
-            logger.info(f"应用已启动 (Spawn, suspended)，PID: {pid}")
+            logger.info(f"App spawned and suspended, PID: {pid}")
             return pid, True
         except (frida.NotSupportedError, frida.ServerNotRunningError):
-            logger.info("Spawn不支持或失败，尝试查找运行中的进程...")
+            logger.info("Spawn is unavailable; looking for an already running app...")
         except Exception as e:
-            logger.warning(f"Spawn尝试失败: {e}")
+            logger.warning(f"Spawn attempt failed: {e}")
 
         try:
             app = next(
@@ -82,12 +82,12 @@ class MonitorService:
                 None,
             )
             if app:
-                logger.info(f"找到已运行应用，PID: {app.pid}")
+                logger.info(f"Found a running app, PID: {app.pid}")
                 return app.pid, False
         except Exception as e:
-            logger.warning(f"查找已运行应用失败: {e}")
+            logger.warning(f"Failed to find a running app: {e}")
 
-        raise Exception(f"无法定位应用 {bundle_id}，请确保应用已安装且设备已解锁。")
+        raise Exception(f"Could not locate {bundle_id}. Ensure it is installed and the device is unlocked.")
 
     @classmethod
     def _attach_with_retry(cls, device, target, max_retries=3):
@@ -95,11 +95,11 @@ class MonitorService:
         for i in range(max_retries):
             try:
                 session = device.attach(target)
-                logger.info(f"成功附加到进程: {target}")
+                logger.info(f"Attached to process: {target}")
                 return session
             except Exception as e:
                 if i == max_retries - 1: raise e
-                logger.warning(f"附加失败 ({i+1}/{max_retries})，1秒后重试: {e}")
+                logger.warning(f"Attach failed ({i + 1}/{max_retries}); retrying in 1 second: {e}")
                 time.sleep(1)
 
     @classmethod
@@ -123,7 +123,7 @@ class MonitorService:
             err_msg = message.get('description',str(message))
             if 'destroyed' not in str(err_msg):
                 logger.error(f"Script Error: {err_msg}")
-                socketio.emit('sys_log', {'msg': f"脚本错误: {err_msg}"})
+                socketio.emit('sys_log', {'msg': f"Script error: {err_msg}"})
 
     @classmethod
     def start_monitoring(cls, bundle_id):
@@ -133,7 +133,7 @@ class MonitorService:
 
         try:
             device = frida.get_usb_device()
-            logger.info(f"准备监控: {bundle_id}")
+            logger.info(f"Preparing to monitor: {bundle_id}")
 
             # 获取PID（优先 Spawn，否则附加到已运行的应用）
             cls.pid, cls.spawned = cls._get_process(device, bundle_id)
@@ -143,7 +143,7 @@ class MonitorService:
             
             # 加载脚本
             js_source = cls._load_js_source()
-            if not js_source: raise Exception("JS脚本加载为空")
+            if not js_source: raise Exception("No JavaScript source was loaded")
             
             cls.script = cls.session.create_script(js_source)
             cls.script.on('message', cls._on_message)
@@ -154,27 +154,27 @@ class MonitorService:
             if cls.spawned:
                 device.resume(cls.pid)
 
-            msg = f"监控已成功启动 (PID: {cls.pid})"
+            msg = f"Monitoring started successfully (PID: {cls.pid})"
             socketio.emit('sys_log', {'msg': msg})
-            return True, "监控已启动"
+            return True, "Monitoring started"
 
         except Exception as e:
             error_msg = str(e)
             logger.error(f"Start Error: {error_msg}")
             
             # 简化的错误提示逻辑
-            tips = "未知错误"
-            if "PermissionDenied" in error_msg: tips = "权限拒绝：请检查证书签名或设备信任设置"
-            elif "process not found" in error_msg.lower(): tips = "未找到进程：请手动启动应用"
-            elif "server" in error_msg.lower(): tips = "连接失败：请检查Frida-server版本"
+            tips = "Unknown error"
+            if "PermissionDenied" in error_msg: tips = "Permission denied: check code signing and device trust"
+            elif "process not found" in error_msg.lower(): tips = "Process not found: start the app manually"
+            elif "server" in error_msg.lower(): tips = "Connection failed: check the Frida Server version"
             
-            socketio.emit('sys_log', {'msg': f"启动失败: {tips}\nDetails: {error_msg}"})
+            socketio.emit('sys_log', {'msg': f"Failed to start: {tips}\nDetails: {error_msg}"})
             return False, error_msg
 
     @classmethod
     def stop_monitoring(cls):
         """停止监控并清理资源"""
-        msg = "无运行任务"
+        msg = "No active monitoring session"
         try:
             if cls.script:
                 try: cls.script.unload()
@@ -189,14 +189,14 @@ class MonitorService:
             if cls.pid and cls.spawned:
                 try:
                     frida.get_usb_device().kill(cls.pid)
-                    msg = f"监控停止，进程已结束: {cls.bundle_id}"
+                    msg = f"Monitoring stopped; process terminated: {cls.bundle_id}"
                 except:
-                    msg = "监控停止 (进程已结束或无法访问)"
+                    msg = "Monitoring stopped (the process already ended or is unavailable)"
             
             socketio.emit('sys_log', {'msg': msg})
 
         except Exception as e:
-            msg = f"停止时发生错误: {e}"
+            msg = f"Error while stopping monitoring: {e}"
             logger.error(msg)
         finally:
             cls.session = None

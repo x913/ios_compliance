@@ -13,9 +13,9 @@ export const SocketClient = {
             const socket = io();
             state.socket = socket;
             
-            socket.on('connect', () => UI.updateSocketStatus('🟢 在线', 'text-success'));
+            socket.on('connect', () => UI.updateSocketStatus('🟢 Connected', 'text-success'));
             socket.on('disconnect', () => { 
-                UI.updateSocketStatus('🔴 离线', 'text-danger'); 
+                UI.updateSocketStatus('🔴 Disconnected', 'text-danger');
                 UI.updateGlobalBar(false);
                 state.currentMonitoredApp = null;
             });

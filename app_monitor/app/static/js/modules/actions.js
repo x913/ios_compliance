@@ -6,14 +6,14 @@ import { Dashboard } from './dashboard.js';
 export const Actions = {
     // 点击“开启监控”
     handleMonitor: async (appName, bundleId) => {
-        if (!state.socket) return UI.alert("错误", "Socket 未连接", "❌", "danger");
+        if (!state.socket) return UI.alert("Error", "Socket is not connected.", "❌", "danger");
 
         // 切换或重启判断
         if (state.currentMonitoredApp) {
             if (state.currentMonitoredApp.bundleId !== bundleId) {
-                if (!(await UI.confirm("切换应用", `停止 [${state.currentMonitoredApp.name}] 并启动 [${appName}]？`, "🔀", "primary", "切换"))) return;
+                if (!(await UI.confirm("Switch application", `Stop [${state.currentMonitoredApp.name}] and start [${appName}]?`, "🔀", "primary", "Switch"))) return;
             } else {
-                if (!(await UI.confirm("重启监控", `是否重启 [${appName}]？`, "🔄", "warning", "重启"))) return;
+                if (!(await UI.confirm("Restart monitoring", `Restart monitoring for [${appName}]?`, "🔄", "warning", "Restart"))) return;
             }
         }
 
@@ -29,7 +29,7 @@ export const Actions = {
         const serverIp = document.getElementById('serverIp').value;
 
         if (mode === 'tweak' && (!deviceIp || !serverIp)) {
-            alert("Tweak 模式下必须填写 IP 地址");
+            alert("Both IP addresses are required in Tweak mode.");
             return;
         }
 
@@ -41,7 +41,7 @@ export const Actions = {
     startProcess: async (mode, appName, bundleId, deviceIp, serverIp) => {
         // 初始化 UI
         UI.activateTab('#info-collection');
-        UI.updateGlobalBar(true, appName, '正在部署'); 
+        UI.updateGlobalBar(true, appName, 'Starting');
         UI.clearAllLogs();
         Dashboard.clear();
 
@@ -49,11 +49,11 @@ export const Actions = {
         let loadingTitle, loadingMsg;
         
         if (mode === 'tweak') {
-            loadingTitle = "正在部署插件";
-            loadingMsg = "正在通过 SSH 传输文件并进行校验...\n请保持网络连接。";
+            loadingTitle = "Deploying Tweak";
+            loadingMsg = "Uploading and validating files over SSH...\nKeep the network connection active.";
         } else {
-            loadingTitle = "正在启动 Frida";
-            loadingMsg = "正在通过 USB 连接设备并注入脚本...\n请保持设备解锁。";
+            loadingTitle = "Starting Frida";
+            loadingMsg = "Connecting over USB and injecting scripts...\nKeep the device unlocked.";
         }
 
         // 显示 Loading
@@ -99,10 +99,10 @@ export const Actions = {
             // 优化错误提示
             let errMsg = e.message;
             if (e.message.includes("Failed to spawn")) {
-                errMsg = "无法启动应用，请检查：\n1. 设备是否解锁\n2. 目标应用是否已安装\n3. 是否有其他 Frida 进程冲突";
+                errMsg = "Unable to start the app. Check:\n1. The device is unlocked\n2. The target app is installed\n3. No other Frida process conflicts";
             }
             
-            UI.alert("启动失败", errMsg, "❌", "danger");
+            UI.alert("Failed to start", errMsg, "❌", "danger");
         }
     },
 
@@ -138,12 +138,12 @@ export const Actions = {
                     cleanup();
                     if (!isReceived) {
                         // 等待超时，提示用户进行修改
-                        UI.updateGlobalBar(true, appName, 'Tweak 未激活'); 
+                        UI.updateGlobalBar(true, appName, 'Tweak inactive');
                         state.currentMonitoredApp = { name: appName, bundleId, mode: 'tweak', deviceIp };
                         
                         UI.alert(
-                            "等待超时", 
-                            "Tweak插件已部署，但未收到加载成功的心跳信号！\n\n如不是目标App安全防护导致，可按以下方案尝试后重新开启监控：\n1. 检查“本地网络”权限\n操作：设置 (Settings) -> 目标App -> 查看“本地网络”开关是否开启。\n2. 检查“无线数据”权限\n操作：设置 -> 目标App -> 查看“无线与蜂窝移动网”开关是否开启。\n3. 检查VPN或代理软件\n操作：关闭所有VPN和代理软件，确保手机纯净的网络通信环境。", 
+                            "Timed out waiting",
+                            "The Tweak was deployed, but no successful-load heartbeat was received.\n\nTry the following before starting monitoring again:\n1. Check the Local Network permission\nSettings → target app → enable Local Network.\n2. Check wireless-data permission\nSettings → target app → allow Wi-Fi and Cellular Data.\n3. Check VPNs and proxies\nTurn off all VPN and proxy apps, then retry on a clean network connection.",
                             "⚠️", "warning"
                         );
                         resolve(false);
@@ -160,10 +160,10 @@ export const Actions = {
         if (!state.currentMonitoredApp) return;
         // 根据模式区分提示文案
         const msg = state.currentMonitoredApp.mode === 'tweak' 
-            ? "确定停止当前监控任务吗？\n将关闭目标应用，请确保SSH连通，以便彻底清除注入插件！"
-            : "确定停止当前监控任务吗？\n将关闭目标应用，以便清除注入脚本！";
+            ? "Stop the current monitoring session?\nThe target app will be closed. Keep SSH connected so the injected Tweak can be removed."
+            : "Stop the current monitoring session?\nThe target app will be closed to remove the injected script.";
 
-        if (!(await UI.confirm("停止监控", msg, "🛑", "danger", "停止"))) return;
+        if (!(await UI.confirm("Stop monitoring", msg, "🛑", "danger", "Stop"))) return;
         
         const { mode, deviceIp, bundleId } = state.currentMonitoredApp;
 
@@ -175,7 +175,7 @@ export const Actions = {
             }
         } catch (e) {
             console.error("[stopMonitor] 发生错误:", e.message);
-            UI.alert("提示", "停止指令发送异常: " + e.message, "⚠️", "warning");
+            UI.alert("Notice", "Could not send the stop command: " + e.message, "⚠️", "warning");
         } finally {
             // 无论成功失败，强制重置 UI
             state.currentMonitoredApp = null;
@@ -191,15 +191,15 @@ export const Actions = {
         btn.disabled = true;
         // 显示加载占位
         const tbody = document.getElementById('appTableBody');
-        tbody.innerHTML = `<tr><td colspan="5" class="p-0 border-0"><div class="d-flex flex-column align-items-center justify-content-center text-muted" style="height: calc(100vh - 200px);"><div class="spinner-border text-primary mb-3"></div><p>正在获取应用数据...</p></div></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="p-0 border-0"><div class="d-flex flex-column align-items-center justify-content-center text-muted" style="height: calc(100vh - 200px);"><div class="spinner-border text-primary mb-3"></div><p>Fetching applications from the device...</p></div></td></tr>`;
 
         try {
             const res = await API.fetchApps();
             if (res.status === 'error') throw new Error(res.message);
             UI.renderAppList(res.data);
         } catch (e) {
-            UI.alert("获取应用失败", e.message, "❌", "danger");
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-danger">数据获取失败</td></tr>`;
+            UI.alert("Failed to fetch applications", e.message, "❌", "danger");
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-danger">Failed to retrieve applications</td></tr>`;
         } finally {
             btn.disabled = false;
         }

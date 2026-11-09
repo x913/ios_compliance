@@ -56,7 +56,7 @@ function startFileHook() {
                         try {
                             if (args[2] && args[2] != 0x0) {
                                 var path = new ObjC.Object(args[2]).toString();
-                                sendFileLog(this.context, "[NSFileHandle fileHandleForReadingAtPath]", "读取", path);
+                                sendFileLog(this.context, "[NSFileHandle fileHandleForReadingAtPath]", "Read", path);
                             }
                         } catch (e) {
                             console.error("[File Monitor] fileHandleForReadingAtPath error: " + e);
@@ -82,7 +82,7 @@ function startFileHook() {
                         try {
                             if (args[2] && args[2] != 0x0) {
                                 var path = new ObjC.Object(args[2]).toString();
-                                sendFileLog(this.context, "[NSFileManager createFileAtPath]", "创建", path);
+                                sendFileLog(this.context, "[NSFileManager createFileAtPath]", "Create", path);
                             }
                         } catch (e) {
                             console.error("[File Monitor] createFileAtPath error: " + e);
@@ -101,7 +101,7 @@ function startFileHook() {
                                 var srcPath = new ObjC.Object(args[2]).toString();
                                 var dstPath = new ObjC.Object(args[3]).toString();
                                 var displayPath = srcPath + " \n➡️ " + dstPath;
-                                sendFileLog(this.context, "[NSFileManager copyItemAtPath]", "复制", displayPath);
+                                sendFileLog(this.context, "[NSFileManager copyItemAtPath]", "Copy", displayPath);
                             }
                         } catch (e) {
                             console.error("[File Monitor] copyItemAtPath error: " + e);
@@ -118,7 +118,7 @@ function startFileHook() {
                         try {
                             if (args[2] && args[2] != 0x0) {
                                 var path = new ObjC.Object(args[2]).toString();
-                                sendFileLog(this.context, "[NSFileManager removeItemAtPath]", "删除", path);
+                                sendFileLog(this.context, "[NSFileManager removeItemAtPath]", "Delete", path);
                             }
                         } catch (e) {
                             console.error("[File Monitor] removeItemAtPath error: " + e);
@@ -143,7 +143,7 @@ function startFileHook() {
                         try {
                             if (args[2] && args[2] != 0x0) {
                                 var path = new ObjC.Object(args[2]).toString();
-                                sendFileLog(this.context, "[NSMutableDictionary writeToFile]", "写入Plist", path);
+                                sendFileLog(this.context, "[NSMutableDictionary writeToFile]", "Write plist", path);
                             }
                         } catch (e) {
                             console.error("[File Monitor] writeToFile error: " + e);

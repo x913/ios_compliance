@@ -18,7 +18,7 @@ function startPrivacyHook() {
                 stack = Thread.backtrace(context, Backtracer.FUZZY)
                     .map(DebugSymbol.fromAddress)
                     .join('\n');
-            } catch (e) { stack = "获取堆栈失败"; }
+            } catch (e) { stack = "Could not capture stack trace"; }
         }
 
         send({
@@ -81,27 +81,27 @@ function startPrivacyHook() {
         // 地理位置监控
         const locationTargets = [
             // 启动定位
-            { cls: "CLLocationManager", m: "- startUpdatingLocation", cat: "申请定位权限", d: "App 已启动持续定位" },
+            { cls: "CLLocationManager", m: "- startUpdatingLocation", cat: "Start continuous location updates", d: "Continuous location updates started" },
             // 单次定位 iOS 9+
-            { cls: "CLLocationManager", m: "- requestLocation", cat: "申请定位权限", d: "请求单次定位" },
-            { cls: "CLLocationManager", m: "- startMonitoringSignificantLocationChanges", cat: "启动定位", d: "App 已启动基于基站/Wi-Fi位置变化监控" },
-            { cls: "CLLocationManager", m: "- startMonitoringForRegion:", cat: "启动地理围栏监控", d: "正在监控地理围栏" },
+            { cls: "CLLocationManager", m: "- requestLocation", cat: "Request one-time location", d: "One-time location requested" },
+            { cls: "CLLocationManager", m: "- startMonitoringSignificantLocationChanges", cat: "Start significant-change monitoring", d: "Monitoring significant location changes" },
+            { cls: "CLLocationManager", m: "- startMonitoringForRegion:", cat: "Start region monitoring", d: "Monitoring a geographic region" },
             
             // 权限申请
-            { cls: "CLLocationManager", m: "- requestWhenInUseAuthorization", cat: "申请定位权限", d: "App 正在申请“仅在使用期间”访问位置的权限" },
-            { cls: "CLLocationManager", m: "- requestAlwaysAuthorization", cat: "申请定位权限", d: "App 正在申请“始终访问”位置的权限" },
+            { cls: "CLLocationManager", m: "- requestWhenInUseAuthorization", cat: "Request location authorization", d: "Requesting When In Use location access" },
+            { cls: "CLLocationManager", m: "- requestAlwaysAuthorization", cat: "Request location authorization", d: "Requesting Always location access" },
             
             // 修改位置
-            { cls: "CLLocationManager", m: "- setAllowsBackgroundLocationUpdates:", cat: "申请定位权限", d: "修改是否允许后台定位" },
-            { cls: "CLLocationManager", m: "- setDesiredAccuracy:", cat: "修改定位", d: "修改定位精度" }
+            { cls: "CLLocationManager", m: "- setAllowsBackgroundLocationUpdates:", cat: "Configure background location", d: "Configure background location updates" },
+            { cls: "CLLocationManager", m: "- setDesiredAccuracy:", cat: "Configure location accuracy", d: "Set desired location accuracy" }
         ];
 
         locationTargets.forEach(t => {
             safeHook(t.cls, t.m, "Location", t.cat, {
                 onEnter: function(args) {
                     // 获取位置数据
-                    if (t.m.includes("setDesiredAccuracy:")) return "精度设为: " + args[2].toDouble();
-                    if (t.m.includes("setAllowsBackgroundLocationUpdates:")) return "后台更新: " + (args[2].toInt32() === 1 ? "开启" : "关闭");
+                    if (t.m.includes("setDesiredAccuracy:")) return "Desired accuracy: " + args[2].toDouble();
+                    if (t.m.includes("setAllowsBackgroundLocationUpdates:")) return "Background updates: " + (args[2].toInt32() === 1 ? "Enabled" : "Disabled");
                     return null;
                 },
                 onLeave: function(retval, enterInfo) {
@@ -114,13 +114,13 @@ function startPrivacyHook() {
         // 相册监控
         const photoLibraryTargets = [
             // 获取共享实例
-            { cls: "PHPhotoLibrary", m: "+ sharedPhotoLibrary", cat: "PhotoLibrary", d: "获取照片库", content: "已访问共享照片库实例" },
+            { cls: "PHPhotoLibrary", m: "+ sharedPhotoLibrary", cat: "PhotoLibrary", d: "Access photo library", content: "Accessed the shared photo-library instance" },
             // 权限申请
-            { cls: "PHPhotoLibrary", m: "+ requestAuthorization:", cat: "PhotoLibrary", d: "获取相册权限", content: "申请相册权限" },
-            { cls: "PHPhotoLibrary", m: "+ requestAuthorizationForAccessLevel:handler:", cat: "PhotoLibrary", d: "获取相册权限", content: "申请相册权限" },
+            { cls: "PHPhotoLibrary", m: "+ requestAuthorization:", cat: "PhotoLibrary", d: "Request photo-library authorization", content: "Requesting photo-library authorization" },
+            { cls: "PHPhotoLibrary", m: "+ requestAuthorizationForAccessLevel:handler:", cat: "PhotoLibrary", d: "Request photo-library authorization", content: "Requesting photo-library authorization" },
             // 内容修改
-            { cls: "PHPhotoLibrary", m: "- performChanges:completionHandler:", cat: "PhotoLibrary", d: "修改相册内容", content: "正在尝试异步修改相册内容" },
-            { cls: "PHPhotoLibrary", m: "- performChangesAndWait:error:", cat: "PhotoLibrary", d: "修改相册内容", content: "正在尝试同步修改相册内容" }
+            { cls: "PHPhotoLibrary", m: "- performChanges:completionHandler:", cat: "PhotoLibrary", d: "Modify photo library", content: "Attempting asynchronous photo-library changes" },
+            { cls: "PHPhotoLibrary", m: "- performChangesAndWait:error:", cat: "PhotoLibrary", d: "Modify photo library", content: "Attempting synchronous photo-library changes" }
         ];
 
         photoLibraryTargets.forEach(t => {
@@ -134,22 +134,22 @@ function startPrivacyHook() {
 
         // 通讯录/相册/媒体设备监控
         const privacyTargets = [
-            { cls: "CNContactStore", m: "- requestAccessForEntityType:completionHandler:", cat: "Contacts", d: "访问通讯录" },
-            { cls: "AVCaptureDevice", m: "+ requestAccessForMediaType:completionHandler:", cat: "MediaDevice", d: "访问摄像头/麦克风" },
-            { cls: "ASIdentifierManager", m: "- advertisingIdentifier", cat: "IDFA", d: "获取IDFA" },
-            { cls: "UIDevice", m: "- identifierForVendor", cat: "IDFV", d: "获取IDFV" }
+            { cls: "CNContactStore", m: "- requestAccessForEntityType:completionHandler:", cat: "Contacts", d: "Request contacts access" },
+            { cls: "AVCaptureDevice", m: "+ requestAccessForMediaType:completionHandler:", cat: "MediaDevice", d: "Request camera or microphone access" },
+            { cls: "ASIdentifierManager", m: "- advertisingIdentifier", cat: "IDFA", d: "Read IDFA" },
+            { cls: "UIDevice", m: "- identifierForVendor", cat: "IDFV", d: "Read IDFV" }
         ];
 
         privacyTargets.forEach(t => safeHook(t.cls, t.m, t.cat, t.d));
 
         // 剪切板监控
         const pbMethods = [
-            { m: "- string", d: "读取剪切板内容" },
-            { m: "- setString:", d: "写入剪切板内容" },
-            { m: "- URL", d: "读取剪切板URL" },
-            { m: "- setURL", d: "写入剪切板URL" },
-            { m: "- items", d: "读取剪切板内容" },
-            { m: "- setItems", d: "写入剪切板内容" },
+            { m: "- string", d: "Read pasteboard text" },
+            { m: "- setString:", d: "Write pasteboard text" },
+            { m: "- URL", d: "Read pasteboard URL" },
+            { m: "- setURL", d: "Write pasteboard URL" },
+            { m: "- items", d: "Read pasteboard items" },
+            { m: "- setItems", d: "Write pasteboard items" },
         ];
 
         ["UIPasteboard", "_UIConcretePasteboard"].forEach(cls => {
@@ -205,10 +205,10 @@ function startPrivacyHook() {
 
         // Keychain 监控
         const keychainFunctions = [
-            { name: "SecItemCopyMatching", cat: "Keychain", desc: "查询Keychain" },
-            { name: "SecItemAdd", cat: "Keychain", desc: "写入Keychain" },
-            { name: "SecItemUpdate", cat: "Keychain", desc: "更新Keychain" },
-            { name: "SecItemDelete", cat: "Keychain", desc: "删除Keychain" }
+            { name: "SecItemCopyMatching", cat: "Keychain", desc: "Query Keychain" },
+            { name: "SecItemAdd", cat: "Keychain", desc: "Add Keychain item" },
+            { name: "SecItemUpdate", cat: "Keychain", desc: "Update Keychain item" },
+            { name: "SecItemDelete", cat: "Keychain", desc: "Delete Keychain item" }
         ];
 
         keychainFunctions.forEach(f => {
@@ -216,7 +216,7 @@ function startPrivacyHook() {
             if (funcPtr) {
                 Interceptor.attach(funcPtr, {
                     onEnter: function(args) {
-                        let detail = "无参数详情";
+                        let detail = "No argument details";
 
                         try {
                             if (f.name === "SecItemUpdate") {
@@ -227,7 +227,7 @@ function startPrivacyHook() {
                                 let queryStr = queryPtr.isNull() ? "null" : new ObjC.Object(queryPtr).toString();
                                 let updateStr = updatePtr.isNull() ? "null" : new ObjC.Object(updatePtr).toString();
                                 
-                                detail = "查询：" + queryStr + " 更新：" + updateStr;
+                                detail = "Query: " + queryStr + " Update: " + updateStr;
                             } else {
                                 // 其他函数（Add, Delete, Copy）通常只关注第一个参数
                                 const queryPtr = args[0];
@@ -236,7 +236,7 @@ function startPrivacyHook() {
                                 }
                             }
                         } catch (e) {
-                            detail = "解析参数失败: " + e.message;
+                            detail = "Could not parse arguments: " + e.message;
                         }
 
                         sendLog(this.context, f.cat, f.name, f.desc, detail);

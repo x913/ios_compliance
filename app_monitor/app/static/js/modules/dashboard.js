@@ -75,7 +75,7 @@ function init() {
 
                                         // 返回自定义对象
                                         return {
-                                            text: `${label}: ${value}次`, // [核心修改] 拼接次数
+                                            text: `${label}: ${value} events`, // [核心修改] 拼接次数
                                             fillStyle: ds.backgroundColor[i],
                                             strokeStyle: ds.backgroundColor[i],
                                             lineWidth: 1,
@@ -100,7 +100,7 @@ function init() {
             data: {
                 labels: [],
                 datasets: [{
-                    label: '请求次数',
+                    label: 'Requests',
                     data: [],
                     backgroundColor: 'rgba(25, 135, 84, 0.6)',
                     borderColor: 'rgba(25, 135, 84, 1)',

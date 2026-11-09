@@ -1,5 +1,41 @@
 import { state } from './state.js';
 
+const sdkCategoryLabels = {
+    '基础能力类': 'Core capabilities',
+    '辅助开发类': 'Developer tooling',
+    '分享类': 'Sharing',
+    '社交': 'Social',
+    '三方登录类': 'Third-party sign-in',
+    '第三方登录类': 'Third-party sign-in',
+    '第三方登陆类': 'Third-party sign-in',
+    '支付类': 'Payments',
+    '统计类': 'Analytics',
+    '数据分析类': 'Data analytics',
+    '广告类': 'Advertising',
+    '推送类': 'Push notifications',
+    '地图导航类': 'Maps & navigation',
+    '生活服务类': 'Lifestyle services',
+    '身份认证类': 'Authentication',
+    '安全风控类': 'Security & fraud prevention',
+    '人脸识别类': 'Facial recognition',
+    '音视频类': 'Audio & video',
+    '即时通讯类': 'Instant messaging',
+    '客服类': 'Customer support',
+    'Crash监控类': 'Crash monitoring',
+    '框架类': 'Framework',
+    '用户画像类': 'User profiling'
+};
+
+function formatSdkCategory(category) {
+    const rawCategory = Array.isArray(category) ? category.join(',') : (category || 'Other');
+    return rawCategory
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((value) => sdkCategoryLabels[value] || value)
+        .join(', ') || 'Other';
+}
+
 /**
  * UI 渲染与交互工具
  */
@@ -45,7 +81,7 @@ export const UI = {
     },
 
     // ... (confirm, alert 等其他方法保持不变，请确保语法正确) ...
-    confirm: (title, message, icon = '🤔', btnType = 'primary', confirmText = '确定') => {
+    confirm: (title, message, icon = '🤔', btnType = 'primary', confirmText = 'Confirm') => {
         return new Promise((resolve) => {
             if (!state.modals.global) { resolve(window.confirm(`${title}\n\n${message}`)); return; }
             document.getElementById('modalTitle').innerText = title;
@@ -72,7 +108,7 @@ export const UI = {
         document.getElementById('modalIcon').innerText = icon;
         const confirmBtn = document.getElementById('modalBtnConfirm');
         confirmBtn.className = `btn btn-${btnType} rounded-pill px-4`;
-        confirmBtn.innerText = "知道了";
+        confirmBtn.innerText = "Got it";
         document.getElementById('modalBtnCancel').classList.add('d-none');
         confirmBtn.onclick = () => state.modals.global.hide();
         state.modals.global.show();
@@ -123,7 +159,7 @@ export const UI = {
             <td class="text-break font-monospace small align-middle">${data.url}</td>
             <td class="text-center align-middle">
                 <button class="btn btn-xs btn-outline-secondary py-0" style="font-size: 11px;" 
-                        onclick="window.showNetworkDetail('${safeData}')">查看详情</button>
+                        onclick="window.showNetworkDetail('${safeData}')">Details</button>
             </td>
         `;
         tbody.prepend(tr);
@@ -136,12 +172,12 @@ export const UI = {
         if (!tbody) return;
 
         const tr = document.createElement('tr');
-        const timestamp = data.timestamp || new Date().toLocaleTimeString('zh-CN', { hour12: false });
+        const timestamp = data.timestamp || new Date().toLocaleTimeString('en-GB', { hour12: false });
         const category = data.category || 'Info';
         const func = data.func || '-';
         const method = data.method || '';
         const content = data.content || '';
-        const stack = data.stack || '无堆栈信息';
+        const stack = data.stack || 'No stack trace available';
 
         let badgeClass = 'bg-secondary text-secondary';
         const catLower = category.toLowerCase();
@@ -163,7 +199,7 @@ export const UI = {
             <td class="text-secondary small align-middle py-2">${method}</td>
             <td class="font-monospace text-dark align-middle text-break fw-bold py-2" style="font-size: 11px;">${content}</td>
             <td class="text-center align-middle py-2">
-                <button class="btn btn-sm btn-outline-secondary py-0" style="font-size: 12px;" onclick="window.showStackTrace('${safeStack}')">查看</button>
+                <button class="btn btn-sm btn-outline-secondary py-0" style="font-size: 12px;" onclick="window.showStackTrace('${safeStack}')">View</button>
             </td>
         `;
         tbody.prepend(tr);
@@ -176,11 +212,11 @@ export const UI = {
         if (!tbody) return;
         
         const tr = document.createElement('tr');
-        const op = data.op || '未知';
-        const stack = data.stack || '无堆栈信息';
+        const op = data.op || 'Unknown';
+        const stack = data.stack || 'No stack trace available';
 
-        let opBadge = op.includes('删除') 
-            ? '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger">删除</span>'
+        let opBadge = op.includes('Delete')
+            ? '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger">Delete</span>'
             : `<span class="badge bg-success bg-opacity-10 text-success border border-success">${op}</span>`;
 
         const safeStack = encodeURIComponent(stack);
@@ -191,7 +227,7 @@ export const UI = {
             <td class="align-middle py-2">${opBadge}</td>
             <td class="text-break font-monospace small align-middle py-2" style="word-break: break-all;">${data.method}</td>
             <td class="text-center align-middle py-2">
-                <button class="btn btn-sm btn-outline-secondary py-0" style="font-size: 12px;" onclick="window.showStackTrace('${safeStack}')">查看详情</button>
+                <button class="btn btn-sm btn-outline-secondary py-0" style="font-size: 12px;" onclick="window.showStackTrace('${safeStack}')">Details</button>
             </td>
         `;
         
@@ -202,7 +238,7 @@ export const UI = {
     renderAppList: (apps) => {
         const tbody = document.getElementById('appTableBody');
         if (!apps || apps.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="p-0 border-0"><div class="d-flex flex-column align-items-center justify-content-center text-muted" style="height: calc(100vh - 200px);"><h5 class="fw-light">无应用</h5></div></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="p-0 border-0"><div class="d-flex flex-column align-items-center justify-content-center text-muted" style="height: calc(100vh - 200px);"><h5 class="fw-light">No applications found</h5></div></td></tr>';
             return;
         }
         tbody.innerHTML = apps.map(app => {
@@ -216,7 +252,7 @@ export const UI = {
                 <td class="font-monospace small text-muted">${app.bundle_id}</td>
                 <td><span class="badge bg-light text-dark border">${app.version}</span></td>
                 <td class="text-end pe-4">
-                    <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="window.handleMonitor('${safeName}', '${app.bundle_id}')">📡 开启监控</button>
+                    <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="window.handleMonitor('${safeName}', '${app.bundle_id}')">📡 Start monitoring</button>
                 </td>
             </tr>`;
         }).join('');
@@ -228,19 +264,20 @@ export const UI = {
         if (!tbody) return;
 
         if (!sdkList || sdkList.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-muted">未检测到已知 SDK</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-muted">No known SDKs detected</td></tr>`;
             if(countBadge) {
-                countBadge.innerText = `${sdkList.length} 个`;
+                countBadge.innerText = `${sdkList.length} detected`;
                 countBadge.className = 'badge rounded-pill bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2';
             }
             return;
         }
 
-        if(countBadge) countBadge.innerText = `${sdkList.length} 个`;
+        if(countBadge) countBadge.innerText = `${sdkList.length} detected`;
 
         let html = '';
         sdkList.forEach((item) => {
             const matchHtml = `<code class="text-primary bg-light px-1 rounded">${item.match}</code>`;
+            const displayCategory = formatSdkCategory(item.category);
             let catColor = 'text-secondary';
             if (item.category.includes('基础') || item.category.includes('工具')) catColor = 'text-info';
             else if (item.category.includes('分享') || item.category.includes('社交')) catColor = 'text-success';
@@ -250,7 +287,7 @@ export const UI = {
             html += `
                 <tr>
                     <td class="ps-4 fw-bold text-dark">${item.name}</td>
-                    <td class="${catColor} small">${item.category}</td>
+                    <td class="${catColor} small">${displayCategory}</td>
                     <td class="small font-monospace text-break">${matchHtml}</td>
                 </tr>
             `;
@@ -271,12 +308,12 @@ export const UI = {
                 <tr>
                     <td colspan="3" class="text-center py-4 text-muted">
                         <span class="spinner-border spinner-border-sm me-2"></span>
-                        正在分析内存与动态库特征...
+                        Analyzing memory and dynamic-library signatures...
                     </td>
                 </tr>
             `;
             if (countBadge) {
-                countBadge.innerText = '分析中...';
+                countBadge.innerText = 'Analyzing...';
                 countBadge.className = 'badge rounded-pill bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2';
             }
         } else {
@@ -284,12 +321,12 @@ export const UI = {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="3" class="text-center py-4 text-muted">
-                        <i class="bi bi-pause-circle me-1"></i> 等待监控启动
+                        <i class="bi bi-pause-circle me-1"></i> Waiting for monitoring to start
                     </td>
                 </tr>
             `;
             if (countBadge) {
-                countBadge.innerText = '等待分析...';
+                countBadge.innerText = 'Waiting for analysis...';
                 countBadge.className = 'badge rounded-pill bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2';
             }
         }
@@ -316,7 +353,7 @@ export const UI = {
         const contentEl = document.getElementById('stackContent');
         const titleEl = document.querySelector('#stackModal .modal-title');
 
-        if (titleEl) titleEl.innerText = "📜 调用堆栈详情";
+        if (titleEl) titleEl.innerText = "📜 Call Stack";
 
         if (contentEl) {
             contentEl.innerHTML = stackStr;
@@ -335,7 +372,7 @@ export const UI = {
         try {
             data = JSON.parse(decodeURIComponent(encodedData));
         } catch (e) {
-            return alert("数据解析失败");
+            return alert("Could not parse request data.");
         }
 
         let rawText = `${data.method} ${data.url}\n`;
@@ -345,7 +382,7 @@ export const UI = {
         rawText += `\n${data.body || '(No Body)'}`;
 
         const titleEl = document.querySelector('#stackModal .modal-title');
-        if (titleEl) titleEl.innerText = "🌐 网络请求详情";
+        if (titleEl) titleEl.innerText = "🌐 Network Request Details";
 
         const contentEl = document.getElementById('stackContent');
         if (contentEl) {

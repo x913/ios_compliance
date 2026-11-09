@@ -23,7 +23,7 @@ function startAntiLock() {
                     // 通知前端
                     send({
                         type: "sys_log",
-                        msg: "⚡️ 已激活防锁屏模式，设备屏幕将保持常亮"
+                        msg: "⚡️ Keep-awake mode is active; the screen will stay on"
                     });
                 }
             }

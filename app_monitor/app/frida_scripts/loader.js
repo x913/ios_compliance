@@ -40,12 +40,12 @@ rpc.exports = {
 
         // 定义需要加载的模块名称和对应的入口函数
         const modules = [
-            { name: "防锁屏", fn: "startAntiLock" },
-            { name: "网络监控", fn: "startNetworkHook" },
-            { name: "文件监控", fn: "startFileHook" },
-            { name: "隐私监控", fn: "startPrivacyHook" },
+            { name: "Keep Screen Awake", fn: "startAntiLock" },
+            { name: "Network Monitor", fn: "startNetworkHook" },
+            { name: "File Monitor", fn: "startFileHook" },
+            { name: "Privacy Monitor", fn: "startPrivacyHook" },
             // [核心修改] 添加 SDK 检测模块入口
-            { name: "SDK检测", fn: "startSDKCheck" } 
+            { name: "SDK Detection", fn: "startSDKCheck" }
         ];
 
         let successCount = 0;
@@ -66,7 +66,7 @@ rpc.exports = {
         });
 
         _global.hooksLoaded = true;
-        send({ type: "sys_log", payload: { msg: `Hooks 已生效 (加载: ${successCount}/${modules.length})` } });
+        send({ type: "sys_log", payload: { msg: `Hooks active (${successCount}/${modules.length} modules loaded)` } });
         console.log("==========================================");
     }
 

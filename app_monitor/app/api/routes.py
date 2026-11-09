@@ -23,7 +23,7 @@ def start_monitor():
     
     # 增加健壮性检查，防止 data 为 None
     if not data:
-        return jsonify({"status": "error", "message": "无效的请求数据"}), 400
+        return jsonify({"status": "error", "message": "Invalid request data"}), 400
 
     bundle_id = data.get('bundle_id')
     
@@ -78,7 +78,7 @@ def start_tweak_monitor():
     server_ip = data.get('server_ip') # 电脑IP
     
     if not all([bundle_id, device_ip, server_ip]):
-        return jsonify({"status": "error", "message": "缺少 IP 参数"}), 400
+        return jsonify({"status": "error", "message": "Both IP addresses are required"}), 400
         
     success, msg = TweakService.deploy_tweak(device_ip, bundle_id, server_ip)
     
