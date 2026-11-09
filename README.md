@@ -1,7 +1,7 @@
 # 🕵️ iOS App 隐私合规检测系统
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Flask](https://img.shields.io/badge/Flask-2.x-green.svg)](https://flask.palletsprojects.com/)
-[![Frida](https://img.shields.io/badge/Frida-16.2.1-red.svg)](https://frida.re/)
+[![Frida](https://img.shields.io/badge/Frida-17.26.2-red.svg)](https://frida.re/)
 [![License](https://img.shields.io/badge/License-LGPL_v2.1-blue.svg)](LICENSE)
 
 一个基于 **Python Flask** + **Frida** / **Theos Tweak** 的 iOS 应用隐私合规审计系统。
@@ -83,7 +83,7 @@
 ### 软件依赖
 -   **Python**: 3.9 及以上
 -   **iOS 端**:
-    -   已安装 `Frida` (源: `build.frida.re`)
+    -   已安装 `Frida` 17.26.2 (源: `build.frida.re`)，设备端与电脑端 Python 客户端必须使用相同版本
     -   已安装 `OpenSSH` (默认密码 `alpine`)
     -   (可选) 越狱插件防反调试工具
 
@@ -96,7 +96,7 @@
 ```bash
 pip install -r requirements.txt
 ```
-(注：项目锁定 Frida 版本为 16.2.1 以保证稳定性)
+(注：项目锁定 Frida 版本为 17.26.2；越狱 iPhone 上也应安装相同版本。)
 ### 2. 启动服务
 确保手机通过 USB 连接电脑，并已信任电脑。
 ```bash

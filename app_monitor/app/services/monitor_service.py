@@ -15,6 +15,7 @@ class MonitorService:
     script = None
     pid = None
     bundle_id = None
+    spawned = False
 
     @staticmethod
     def _load_js_source():
@@ -58,18 +59,34 @@ class MonitorService:
 
     @classmethod
     def _get_process(cls, device, bundle_id):
-        """获取目标进程PID，优先Spawn，失败则查找现有进程"""
+        """Return a PID and whether this service spawned it."""
         try:
-            # 尝试启动应用
+            # Keep the spawned process suspended. The caller attaches, loads
+            # all hooks, and only then resumes it so early app activity is not
+            # missed.
             pid = device.spawn([bundle_id])
-            logger.info(f"应用已启动 (Spawn)，PID: {pid}")
-            device.resume(pid) # 早点调用resume防止卡死，视情况调整
-            return pid
+            logger.info(f"应用已启动 (Spawn, suspended)，PID: {pid}")
+            return pid, True
         except (frida.NotSupportedError, frida.ServerNotRunningError):
             logger.info("Spawn不支持或失败，尝试查找运行中的进程...")
         except Exception as e:
             logger.warning(f"Spawn尝试失败: {e}")
-            
+
+        try:
+            app = next(
+                (
+                    candidate
+                    for candidate in device.enumerate_applications()
+                    if candidate.identifier == bundle_id and candidate.pid != 0
+                ),
+                None,
+            )
+            if app:
+                logger.info(f"找到已运行应用，PID: {app.pid}")
+                return app.pid, False
+        except Exception as e:
+            logger.warning(f"查找已运行应用失败: {e}")
+
         raise Exception(f"无法定位应用 {bundle_id}，请确保应用已安装且设备已解锁。")
 
     @classmethod
@@ -118,8 +135,8 @@ class MonitorService:
             device = frida.get_usb_device()
             logger.info(f"准备监控: {bundle_id}")
 
-            # 获取PID (Spawn 或 Attach)
-            cls.pid = cls._get_process(device, bundle_id)
+            # 获取PID（优先 Spawn，否则附加到已运行的应用）
+            cls.pid, cls.spawned = cls._get_process(device, bundle_id)
 
             # 附加进程
             cls.session = cls._attach_with_retry(device, cls.pid)
@@ -132,8 +149,10 @@ class MonitorService:
             cls.script.on('message', cls._on_message)
             cls.script.load()
 
-            # 如果是Spawn的应用，再次确保运行
-            device.resume(cls.pid)
+            # Resume only processes spawned by this service. Existing app
+            # processes were already running when hooks were loaded.
+            if cls.spawned:
+                device.resume(cls.pid)
 
             msg = f"监控已成功启动 (PID: {cls.pid})"
             socketio.emit('sys_log', {'msg': msg})
@@ -165,8 +184,9 @@ class MonitorService:
                 try: cls.session.detach()
                 except: pass
                 
-            # 杀掉进程，
-            if cls.pid:
+            # Only stop a process we started ourselves. A pre-existing app is
+            # left running when monitoring ends.
+            if cls.pid and cls.spawned:
                 try:
                     frida.get_usb_device().kill(cls.pid)
                     msg = f"监控停止，进程已结束: {cls.bundle_id}"
@@ -183,5 +203,6 @@ class MonitorService:
             cls.script = None
             cls.pid = None
             cls.bundle_id = None
+            cls.spawned = False
             
         return True, msg

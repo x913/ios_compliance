@@ -1,6 +1,6 @@
 flask
 flask-socketio
-frida==16.2.1
-frida-tools==12.3.0
+frida==17.26.2
+frida-tools==14.13.0
 paramiko
 simple-websocket

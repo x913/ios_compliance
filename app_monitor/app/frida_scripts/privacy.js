@@ -205,14 +205,14 @@ function startPrivacyHook() {
 
         // Keychain 监控
         const keychainFunctions = [
-            { name: "SecItemCopyMatching", module: "Security", cat: "Keychain", desc: "查询Keychain" },
-            { name: "SecItemAdd", module: "Security", cat: "Keychain", desc: "写入Keychain" },
-            { name: "SecItemUpdate", module: "Security", cat: "Keychain", desc: "更新Keychain" },
-            { name: "SecItemDelete", module: "Security", cat: "Keychain", desc: "删除Keychain" }
+            { name: "SecItemCopyMatching", cat: "Keychain", desc: "查询Keychain" },
+            { name: "SecItemAdd", cat: "Keychain", desc: "写入Keychain" },
+            { name: "SecItemUpdate", cat: "Keychain", desc: "更新Keychain" },
+            { name: "SecItemDelete", cat: "Keychain", desc: "删除Keychain" }
         ];
 
         keychainFunctions.forEach(f => {
-            const funcPtr = Module.findExportByName(f.module, f.name);
+            const funcPtr = Module.findGlobalExportByName(f.name);
             if (funcPtr) {
                 Interceptor.attach(funcPtr, {
                     onEnter: function(args) {

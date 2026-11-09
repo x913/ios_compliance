@@ -5,8 +5,13 @@
 function bypassAntiDebug() {
     console.log("[Anti-Anti-Debug] 加载模块: Anti-Debug Bypass");
     // 绕过 ptrace PT_DENY_ATTACH
-    var ptracePtr = Module.findExportByName(null, "ptrace");
+    const ptracePtr = Module.findGlobalExportByName("ptrace");
     if (ptracePtr) {
+        const originalPtrace = new NativeFunction(
+            ptracePtr,
+            "int",
+            ["int", "int", "pointer", "int"]
+        );
         Interceptor.replace(ptracePtr, new NativeCallback(function(request, pid, addr, data) {
             // PT_DENY_ATTACH 的值通常是 31
             if (request == 31) {
@@ -14,12 +19,12 @@ function bypassAntiDebug() {
                 return 0; // 返回成功，实际上什么都没做
             }
             // 其他 ptrace 调用放行
-            return Function(ptracePtr)(request, pid, addr, data);
-        }, 'int', ['int', 'int', 'pointer', 'pointer']));
+            return originalPtrace(request, pid, addr, data);
+        }, "int", ["int", "int", "pointer", "int"]));
     }
 
     // 绕过 sysctl 检测 P_TRACED
-    var sysctlPtr = Module.findExportByName(null, "sysctl");
+    const sysctlPtr = Module.findGlobalExportByName("sysctl");
     if (sysctlPtr) {
         Interceptor.attach(sysctlPtr, {
             onEnter: function(args) {

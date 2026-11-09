@@ -72,7 +72,7 @@ rpc.exports = {
 
     // dlopen 监听 
     function setupDlopenMonitor() {
-        const dlopen = Module.findExportByName(null, "dlopen");
+        const dlopen = Module.findGlobalExportByName("dlopen");
         if (!dlopen) return;
 
         try {
