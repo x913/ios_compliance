@@ -50,7 +50,8 @@ export function startWebViewHook() {
     const hookedMethods = new Set();
 
     function sendNavigation(url, source, metadata = {}) {
-        if (!url) return;
+        const normalizedUrl = url.trim().toLowerCase();
+        if (!normalizedUrl || normalizedUrl === "about:blank" || normalizedUrl === "about:srcdoc") return;
         send({
             type: "webview",
             timestamp: timestamp(),
