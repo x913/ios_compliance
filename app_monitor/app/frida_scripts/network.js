@@ -1,193 +1,251 @@
 import ObjC from "frida-objc-bridge";
 
 // =================================================================
-// 网络监控模块 (Network Monitor) 
+// Network monitor
 // =================================================================
 
+const MAX_CAPTURED_BODY_BYTES = 256 * 1024;
+
 export function startNetworkHook() {
-    console.log("[Network Monitor] 加载模块: Network Monitor 模块");
+    console.log("[Network Monitor] Loading network monitor");
     let hookCount = 0;
-    // 将NSData 转为 String
+    let requestSequence = 0;
+    const pendingCompletionBlocks = new Set();
+
+    function timestamp() {
+        const now = new Date();
+        const pad = (value) => value.toString().padStart(2, "0");
+        return `${now.getFullYear()}/${pad(now.getMonth() + 1)}/${pad(now.getDate())}, ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    }
+
+    function requestId() {
+        requestSequence += 1;
+        return `request-${Date.now()}-${requestSequence}`;
+    }
+
+    function objectFromPointer(pointer) {
+        if (!pointer) return null;
+        if (pointer.handle) return pointer;
+        if (pointer.isNull && pointer.isNull()) return null;
+        return new ObjC.Object(pointer);
+    }
+
     function nsDataToString(data) {
         try {
-            if (!data || data.length() === 0) return "";
-            var str = ObjC.classes.NSString.alloc().initWithData_encoding_(data, 4); // UTF8
-            if (str) {
-                return str.toString();
+            if (!data) return "";
+            const length = Number(data.length());
+            if (length === 0) return "";
+            if (length > MAX_CAPTURED_BODY_BYTES) {
+                return `[Body omitted: ${length} bytes exceeds ${MAX_CAPTURED_BODY_BYTES}-byte limit]`;
             }
-            return "[Binary Data] Length: " + data.length();
-        } catch (e) {
-            return "[Data Convert Error]";
+
+            const string = ObjC.classes.NSString.alloc().initWithData_encoding_(data, 4);
+            return string ? string.toString() : `[Binary data: ${length} bytes]`;
+        } catch (error) {
+            return "[Body conversion failed]";
         }
     }
 
-    // 将 NSDictionary 转为 JS Object
     function nsDictToObject(dict) {
         try {
-            var jsObj = {};
-            if (!dict) return jsObj;
-            
-            var keys = dict.allKeys();
-            var count = keys.count();
-            for (var i = 0; i < count; i++) {
-                var key = keys.objectAtIndex_(i).toString();
-                var value = dict.objectForKey_(key).toString();
-                jsObj[key] = value;
+            const result = {};
+            if (!dict) return result;
+
+            const keys = dict.allKeys();
+            const count = keys.count();
+            for (let index = 0; index < count; index += 1) {
+                const key = keys.objectAtIndex_(index).toString();
+                const value = dict.objectForKey_(key);
+                result[key] = value ? value.toString() : "";
             }
-            return jsObj;
-        } catch (e) {
+            return result;
+        } catch (error) {
             return {};
         }
     }
 
+    function emitRequest(method, url, headers, body) {
+        const data = {
+            type: "network",
+            request_id: requestId(),
+            timestamp: timestamp(),
+            method,
+            url,
+            headers,
+            body
+        };
+        send(data);
+        return data;
+    }
+
     function handleRequest(request) {
+        let url = "Unknown URL";
+        let method = "GET";
+        let headers = {};
+        let body = "";
+
         try {
-            var urlStr = "Unknown URL";
-            var method = "GET"; 
-            var bodyContent = "";
-            var headers = {};
+            if (request.URL && request.URL()) {
+                url = request.URL().absoluteString().toString();
+            }
+            if (request.HTTPMethod && request.HTTPMethod()) {
+                method = request.HTTPMethod().toString();
+            }
+            if (request.allHTTPHeaderFields && request.allHTTPHeaderFields()) {
+                headers = nsDictToObject(request.allHTTPHeaderFields());
+            }
+            if (request.HTTPBody && request.HTTPBody()) {
+                body = nsDataToString(request.HTTPBody());
+            }
+        } catch (error) {
+            console.error(`[Network] Request parsing failed: ${error}`);
+        }
 
-            if (request && request.handle != 0x0) {
-                try {
-                    // 1. URL
-                    if (request.URL && request.URL()) {
-                        var url = request.URL();
-                        if (url && url.absoluteString) {
-                            urlStr = url.absoluteString().toString();
-                        }
-                    }
+        return emitRequest(method, url, headers, body);
+    }
 
-                    // 2. Method
-                    if (request.HTTPMethod && request.HTTPMethod()) {
-                        method = request.HTTPMethod().toString();
-                    }
+    function handleURL(url, session) {
+        let urlString = "Unknown URL";
+        let headers = {};
 
-                    // 3. Headers 
-                    if (request.allHTTPHeaderFields && request.allHTTPHeaderFields()) {
-                        headers = nsDictToObject(request.allHTTPHeaderFields());
-                    }
+        try {
+            urlString = url.absoluteString().toString();
+            if (session && session.configuration) {
+                const configuration = session.configuration();
+                const additionalHeaders = configuration.HTTPAdditionalHeaders();
+                if (additionalHeaders) headers = nsDictToObject(additionalHeaders);
+            }
+        } catch (error) {
+            console.error(`[Network] URL request parsing failed: ${error}`);
+        }
 
-                    // 4. Body
-                    if (request.HTTPBody && request.HTTPBody()) {
-                        bodyContent = nsDataToString(request.HTTPBody());
-                    }
-                } catch (e) {
-                    console.error("[Network] Request parsing error: " + e);
-                }
+        return emitRequest("GET", urlString, headers, "");
+    }
+
+    function errorDescription(errorPointer) {
+        try {
+            const error = objectFromPointer(errorPointer);
+            return error ? error.localizedDescription().toString() : "";
+        } catch (error) {
+            return "[Response error could not be read]";
+        }
+    }
+
+    function emitResponse(request, responsePointer, bodyPointer, errorPointer, isDownload) {
+        try {
+            const response = objectFromPointer(responsePointer);
+            const bodyObject = objectFromPointer(bodyPointer);
+            const headers = response && response.allHeaderFields
+                ? nsDictToObject(response.allHeaderFields())
+                : {};
+            const isHttpResponse = response
+                && response.isKindOfClass_(ObjC.classes.NSHTTPURLResponse);
+            const statusCode = isHttpResponse ? response.statusCode().toString() : null;
+            const responseUrl = response && response.URL && response.URL()
+                ? response.URL().absoluteString().toString()
+                : request.url;
+
+            let body = "";
+            if (isDownload) {
+                body = bodyObject && bodyObject.absoluteString
+                    ? `[Downloaded file: ${bodyObject.absoluteString().toString()}]`
+                    : "[Download completed]";
+            } else {
+                body = nsDataToString(bodyObject);
             }
 
             send({
-                "type": "network",
-                "timestamp": (function(d) {
-                    var year = d.getFullYear();
-                    var month = (d.getMonth() + 1).toString().padStart(2, '0');
-                    var day = d.getDate().toString().padStart(2, '0');
-                    var hour = d.getHours().toString().padStart(2, '0');
-                    var min = d.getMinutes().toString().padStart(2, '0');
-                    var sec = d.getSeconds().toString().padStart(2, '0');
-                    return `${year}/${month}/${day}, ${hour}:${min}:${sec}`;
-                })(new Date()), // Changed format to YYYY/MM/DD, HH:MM:SS
-                "method": method,
-                "url": urlStr,
-                "headers": headers, // 发送 Headers
-                "body": bodyContent
+                type: "network_response",
+                request_id: request.request_id,
+                timestamp: timestamp(),
+                url: responseUrl,
+                status_code: statusCode,
+                headers,
+                body,
+                error: errorDescription(errorPointer)
             });
-
-        } catch (e) {
-            console.error("[Network] Extract Error: " + e);
+        } catch (error) {
+            console.error(`[Network] Response parsing failed: ${error}`);
         }
     }
 
-    // Hook NSURLSession
-    function handleURL(url, session) {
-        var urlStr = url.absoluteString().toString();
-        var finalHeaders = {};
-        var hasHeaders = false;
+    function wrapCompletionHandler(blockPointer, request, isDownload) {
+        if (!blockPointer || blockPointer.isNull()) return;
 
         try {
-            // 从当前 Session 的 Configuration 中提取默认 Header
-            if (session && session.configuration) {
-                var config = session.configuration();
-                var additionalHeaders = config.HTTPAdditionalHeaders();
-                if (additionalHeaders) {
-                    finalHeaders = nsDictToObject(additionalHeaders);
-                    // 检查是否有实际内容
-                    if (Object.keys(finalHeaders).length > 0) {
-                        hasHeaders = true;
+            const block = new ObjC.Block(blockPointer);
+            if (block.types === undefined) {
+                block.declare({ retType: "void", argTypes: ["object", "object", "object"] });
+            }
+            const originalImplementation = block.implementation;
+            pendingCompletionBlocks.add(block);
+
+            block.implementation = function (body, response, error) {
+                try {
+                    emitResponse(request, response, body, error, isDownload);
+                } finally {
+                    try {
+                        return originalImplementation.apply(this, arguments);
+                    } finally {
+                        pendingCompletionBlocks.delete(block);
                     }
                 }
-            }
-        } catch (e) {
-            console.error("[Network] 获取 Session Configuration 失败: " + e);
+            };
+        } catch (error) {
+            console.error(`[Network] Completion handler hook failed: ${error}`);
         }
-
-        var logData = {
-            "type": "network",
-            "timestamp": (function(d) {
-                return d.getFullYear() + "/" + 
-                       (d.getMonth() + 1).toString().padStart(2, '0') + "/" + 
-                       d.getDate().toString().padStart(2, '0') + ", " + 
-                       d.getHours().toString().padStart(2, '0') + ":" + 
-                       d.getMinutes().toString().padStart(2, '0') + ":" + 
-                       d.getSeconds().toString().padStart(2, '0');
-            })(new Date()),
-            "method": "GET",
-            "url": urlStr,
-            "body": ""
-        };
-
-        // 只有存在 Header 时才写入字段
-        if (hasHeaders) {
-            logData["headers"] = finalHeaders;
-        }
-
-        send(logData);
     }
 
     try {
-        var sessionClass = ObjC.classes.NSURLSession;
-        if (sessionClass) {
-            var selectors = [
-                "- dataTaskWithRequest:",
-                "- dataTaskWithRequest:completionHandler:",
-                "- dataTaskWithRequest:uploadProgress:downloadProgress:completionHandler:",
-                "- dataTaskWithURL:",
-                "- dataTaskWithURL:completionHandler:",
-                "- uploadTaskWithRequest:fromData:",
-                "- uploadTaskWithRequest:fromData:completionHandler:",
-                "- uploadTaskWithStreamedRequest:",
-                "- downloadTaskWithRequest:",
-                "- downloadTaskWithRequest:completionHandler:",
-                "- downloadTaskWithURL:",
-                "- downloadTaskWithURL:completionHandler:",
-                "- webSocketTaskWithURL:",
-                "- webSocketTaskWithURL:protocols:"
-            ];
+        const sessionClass = ObjC.classes.NSURLSession;
+        if (!sessionClass) return hookCount;
 
-            selectors.forEach(function(sel) {
-                if (sessionClass[sel]) {
-                    Interceptor.attach(sessionClass[sel].implementation, {
-                        onEnter: function(args) {
-                            try {
-                                var session = ObjC.Object(args[0]); // self
-                                var arg2 = ObjC.Object(args[2]);    // request 或 url
+        const selectors = [
+            { name: "- dataTaskWithRequest:", argumentIndex: 2 },
+            { name: "- dataTaskWithRequest:completionHandler:", argumentIndex: 2, completionIndex: 3 },
+            { name: "- dataTaskWithRequest:uploadProgress:downloadProgress:completionHandler:", argumentIndex: 2, completionIndex: 5 },
+            { name: "- dataTaskWithURL:", argumentIndex: 2 },
+            { name: "- dataTaskWithURL:completionHandler:", argumentIndex: 2, completionIndex: 3 },
+            { name: "- uploadTaskWithRequest:fromData:", argumentIndex: 2 },
+            { name: "- uploadTaskWithRequest:fromData:completionHandler:", argumentIndex: 2, completionIndex: 4 },
+            { name: "- uploadTaskWithStreamedRequest:", argumentIndex: 2 },
+            { name: "- downloadTaskWithRequest:", argumentIndex: 2 },
+            { name: "- downloadTaskWithRequest:completionHandler:", argumentIndex: 2, completionIndex: 3, isDownload: true },
+            { name: "- downloadTaskWithURL:", argumentIndex: 2 },
+            { name: "- downloadTaskWithURL:completionHandler:", argumentIndex: 2, completionIndex: 3, isDownload: true },
+            { name: "- webSocketTaskWithURL:", argumentIndex: 2 },
+            { name: "- webSocketTaskWithURL:protocols:", argumentIndex: 2 }
+        ];
 
-                                if (arg2.isKindOfClass_(ObjC.classes.NSURLRequest)) {
-                                    // 处理 Request 的逻辑也要同步修改：合并 session.config 的 Header
-                                    handleRequest(arg2, session);
-                                } else if (arg2.isKindOfClass_(ObjC.classes.NSURL)) {
-                                    handleURL(arg2, session);
-                                }
-                            } catch (e) {
-                                console.error("[Network] Hook " + sel + " 内部错误: " + e);
-                            }
+        selectors.forEach((selector) => {
+            if (!sessionClass[selector.name]) return;
+
+            Interceptor.attach(sessionClass[selector.name].implementation, {
+                onEnter(args) {
+                    try {
+                        const session = objectFromPointer(args[0]);
+                        const target = objectFromPointer(args[selector.argumentIndex]);
+                        let request = null;
+
+                        if (target && target.isKindOfClass_(ObjC.classes.NSURLRequest)) {
+                            request = handleRequest(target);
+                        } else if (target && target.isKindOfClass_(ObjC.classes.NSURL)) {
+                            request = handleURL(target, session);
                         }
-                    });
-                    hookCount++;
+
+                        if (request && selector.completionIndex !== undefined) {
+                            wrapCompletionHandler(args[selector.completionIndex], request, Boolean(selector.isDownload));
+                        }
+                    } catch (error) {
+                        console.error(`[Network] Hook ${selector.name} failed: ${error}`);
+                    }
                 }
             });
-        }
-    } catch (e) { console.error("[Network] Hook 异常: " + e); }
+            hookCount += 1;
+        });
+    } catch (error) {
+        console.error(`[Network] Hook setup failed: ${error}`);
+    }
 
     return hookCount;
 }

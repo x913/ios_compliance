@@ -117,6 +117,7 @@ class MonitorService:
             # 消息类型映射
             event_map = {
                 'network': 'network_log',
+                'network_response': 'network_response_log',
                 'file': 'file_log',
                 'info': 'info_log',
                 'sdk': 'sdk_log',

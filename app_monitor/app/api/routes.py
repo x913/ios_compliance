@@ -57,6 +57,8 @@ def report_log():
     # 转发给前端 (复用现有的 Socket 事件)
     if msg_type == 'network':
         socketio.emit('network_log', data)
+    elif msg_type == 'network_response':
+        socketio.emit('network_response_log', data)
     elif msg_type == 'file':
         socketio.emit('file_log', data)
     elif msg_type == 'info':

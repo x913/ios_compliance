@@ -28,6 +28,11 @@ export const SocketClient = {
                 Dashboard.updateNetwork(data.url);
             });
 
+            socket.on('network_response_log', (data) => {
+                console.log("[Debug] Network Response:", data);
+                if (UI && UI.renderNetworkResponse) UI.renderNetworkResponse(data);
+            });
+
             socket.on('file_log', (data) => {
                 console.log("[Debug] File Data:", data);
                 if (UI && UI.renderFileLog) UI.renderFileLog(data);

@@ -9,6 +9,7 @@
 @interface NSURLSession (Monitor)
 - (NSDictionary *)captureRequestDetails:(NSURLRequest *)request;
 - (NSDictionary *)captureDetailsFromURL:(NSURL *)url method:(NSString *)method;
+- (NSDictionary *)captureResponseDetails:(NSURLResponse *)response body:(NSData *)body error:(NSError *)error requestID:(NSString *)requestID;
 @end
 
 
@@ -29,7 +30,14 @@
     NSDictionary *logData = [self captureRequestDetails:request];
     [MonitorUtils sendLog:logData];
 
-    return %orig;
+    if (!completionHandler) return %orig;
+    NSString *requestID = logData[@"request_id"];
+    void (^wrappedCompletionHandler)(NSData *, NSURLResponse *, NSError *) = ^(NSData *data, NSURLResponse *response, NSError *error) {
+        [MonitorUtils sendLog:[self captureResponseDetails:response body:data error:error requestID:requestID]];
+        if (completionHandler) completionHandler(data, response, error);
+    };
+
+    return %orig(request, wrappedCompletionHandler);
 }
 
 // 监控不带 completionHandler 的请求 
@@ -56,7 +64,14 @@
     NSDictionary *logData = [self captureDetailsFromURL:url method:@"GET"];
     [MonitorUtils sendLog:logData];
 
-    return %orig;
+    if (!completionHandler) return %orig;
+    NSString *requestID = logData[@"request_id"];
+    void (^wrappedCompletionHandler)(NSData *, NSURLResponse *, NSError *) = ^(NSData *data, NSURLResponse *response, NSError *error) {
+        [MonitorUtils sendLog:[self captureResponseDetails:response body:data error:error requestID:requestID]];
+        if (completionHandler) completionHandler(data, response, error);
+    };
+
+    return %orig(url, wrappedCompletionHandler);
 }
 
 // 监控 dataTaskWithURL
@@ -77,6 +92,7 @@
     NSMutableDictionary *dict = [NSMutableDictionary dictionary];
     
     dict[@"type"] = @"network";
+    dict[@"request_id"] = [NSUUID UUID].UUIDString;
     dict[@"method"] = method ?: @"GET";
     dict[@"url"] = url.absoluteString ?: @"";
     NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
@@ -110,6 +126,7 @@
     
     // 基础信息
     dict[@"type"] = @"network";
+    dict[@"request_id"] = [NSUUID UUID].UUIDString;
     dict[@"method"] = request.HTTPMethod ?: @"GET";
     dict[@"url"] = request.URL.absoluteString ?: @"";
 
@@ -134,6 +151,37 @@
     } else if (request.HTTPBodyStream) {
         dict[@"body"] = @"[Stream Body - Not Captured]";
     }
+    return dict;
+}
+
+%new
+- (NSDictionary *)captureResponseDetails:(NSURLResponse *)response body:(NSData *)body error:(NSError *)error requestID:(NSString *)requestID {
+    NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+    dict[@"type"] = @"network_response";
+    dict[@"request_id"] = requestID ?: @"";
+    dict[@"url"] = response.URL.absoluteString ?: @"";
+
+    NSDateFormatter *formatter = [[NSDateFormatter alloc] init];
+    [formatter setDateFormat:@"yyyy/MM/dd, HH:mm:ss"];
+    dict[@"timestamp"] = [formatter stringFromDate:[NSDate date]];
+
+    if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
+        NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)response;
+        dict[@"status_code"] = @(httpResponse.statusCode);
+        if (httpResponse.allHeaderFields) dict[@"headers"] = httpResponse.allHeaderFields;
+    }
+
+    if (error) dict[@"error"] = error.localizedDescription ?: @"Request failed";
+
+    if (body.length > 256 * 1024) {
+        dict[@"body"] = [NSString stringWithFormat:@"[Body omitted: %lu bytes exceeds 262144-byte limit]", (unsigned long)body.length];
+    } else if (body) {
+        NSString *bodyString = [[NSString alloc] initWithData:body encoding:NSUTF8StringEncoding];
+        dict[@"body"] = bodyString ?: [NSString stringWithFormat:@"[Binary data: %lu bytes]", (unsigned long)body.length];
+    } else {
+        dict[@"body"] = @"";
+    }
+
     return dict;
 }
 

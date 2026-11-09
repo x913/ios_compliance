@@ -36,6 +36,69 @@ function formatSdkCategory(category) {
         .join(', ') || 'Other';
 }
 
+const networkEntries = new Map();
+
+function setNetworkResponseStatus(cell, response) {
+    if (!cell) return;
+
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+
+    if (!response) {
+        badge.classList.add('bg-secondary');
+        badge.textContent = 'Pending';
+    } else if (response.error) {
+        badge.classList.add('bg-danger');
+        badge.textContent = 'Error';
+    } else if (response.status_code) {
+        const status = Number(response.status_code);
+        badge.classList.add(status >= 200 && status < 400 ? 'bg-success' : 'bg-warning', 'text-dark');
+        badge.textContent = `HTTP ${response.status_code}`;
+    } else {
+        badge.classList.add('bg-info', 'text-dark');
+        badge.textContent = 'Completed';
+    }
+
+    cell.replaceChildren(badge);
+}
+
+function formatNetworkDetails(request, response) {
+    const lines = ['REQUEST', `${request.method || 'GET'} ${request.url || 'Unknown URL'}`];
+
+    Object.entries(request.headers || {}).forEach(([key, value]) => lines.push(`${key}: ${value}`));
+    lines.push('', 'BODY', request.body || '(No body)');
+
+    lines.push('', 'RESPONSE');
+    if (!response) {
+        lines.push('Pending or unavailable (the task has no completion handler).');
+        return lines.join('\n');
+    }
+
+    lines.push(response.status_code ? `HTTP ${response.status_code}` : 'Completed');
+    if (response.url && response.url !== request.url) lines.push(response.url);
+    Object.entries(response.headers || {}).forEach(([key, value]) => lines.push(`${key}: ${value}`));
+    if (response.error) lines.push('', `ERROR: ${response.error}`);
+    lines.push('', 'BODY', response.body || '(No body)');
+
+    return lines.join('\n');
+}
+
+function showNetworkDetails(request, response) {
+    if (!state.modals.stack) {
+        const element = document.getElementById('stackModal');
+        if (element) state.modals.stack = new bootstrap.Modal(element);
+    }
+
+    const titleEl = document.querySelector('#stackModal .modal-title');
+    if (titleEl) titleEl.innerText = '🌐 Network Request & Response';
+
+    const contentEl = document.getElementById('stackContent');
+    if (contentEl) {
+        contentEl.innerText = formatNetworkDetails(request, response);
+        if (state.modals.stack) state.modals.stack.show();
+    }
+}
+
 /**
  * UI 渲染与交互工具
  */
@@ -146,24 +209,48 @@ export const UI = {
     renderNetworkLog: (data) => {
         const tbody = document.getElementById('netLogBody');
         if (!tbody) return;
-        
+
+        const requestId = data.request_id || `request-${Date.now()}-${networkEntries.size}`;
+        const request = { ...data, request_id: requestId };
+        networkEntries.set(requestId, { request, response: null });
+
         const tr = document.createElement('tr');
+        tr.dataset.requestId = requestId;
         let methodColor = data.method === 'GET' ? 'text-success' : 'text-primary';
         if (data.method === 'POST') methodColor = 'text-warning fw-bold';
-        
-        const safeData = encodeURIComponent(JSON.stringify(data));
-        
+
         tr.innerHTML = `
             <td class="text-muted font-monospace align-middle">${data.timestamp}</td>
             <td class="fw-bold ${methodColor} align-middle">${data.method}</td>
             <td class="text-break font-monospace small align-middle">${data.url}</td>
+            <td id="network-response-${requestId}" class="text-center align-middle"></td>
             <td class="text-center align-middle">
                 <button class="btn btn-xs btn-outline-secondary py-0" style="font-size: 11px;" 
-                        onclick="window.showNetworkDetail('${safeData}')">Details</button>
+                        onclick="window.showNetworkDetailById('${requestId}')">Details</button>
             </td>
         `;
         tbody.prepend(tr);
-        if (tbody.children.length > 500) tbody.lastElementChild.remove();
+        setNetworkResponseStatus(document.getElementById(`network-response-${requestId}`), null);
+
+        if (tbody.children.length > 500) {
+            const removed = tbody.lastElementChild;
+            networkEntries.delete(removed.dataset.requestId);
+            removed.remove();
+        }
+    },
+
+    renderNetworkResponse: (data) => {
+        const entry = networkEntries.get(data.request_id);
+        if (!entry) {
+            console.warn('[Network] Received a response without its request:', data.request_id);
+            return;
+        }
+
+        entry.response = data;
+        setNetworkResponseStatus(
+            document.getElementById(`network-response-${data.request_id}`),
+            data
+        );
     },
 
     // 渲染信息采集日志
@@ -333,6 +420,7 @@ export const UI = {
     },
 
     clearAllLogs: () => {
+        networkEntries.clear();
         ['netLogBody', 'fileLogBody', 'infoLogBody'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.innerHTML = '';
@@ -361,33 +449,23 @@ export const UI = {
         }
     },
 
-    // 显示网络详情 (Raw Request)
-    showNetworkDetail: (encodedData) => {
-        if (!state.modals.stack) {
-            const el = document.getElementById('stackModal');
-            if (el) state.modals.stack = new bootstrap.Modal(el);
+    showNetworkDetailById: (requestId) => {
+        const entry = networkEntries.get(requestId);
+        if (!entry) {
+            UI.alert('Network entry unavailable', 'The selected request is no longer in the log.', '⚠️', 'warning');
+            return;
         }
+        showNetworkDetails(entry.request, entry.response);
+    },
 
+    // Kept for compatibility with existing inline calls.
+    showNetworkDetail: (encodedData) => {
         let data;
         try {
             data = JSON.parse(decodeURIComponent(encodedData));
         } catch (e) {
             return alert("Could not parse request data.");
         }
-
-        let rawText = `${data.method} ${data.url}\n`;
-        if (data.headers) {
-            Object.entries(data.headers).forEach(([k, v]) => rawText += `${k}: ${v}\n`);
-        }
-        rawText += `\n${data.body || '(No Body)'}`;
-
-        const titleEl = document.querySelector('#stackModal .modal-title');
-        if (titleEl) titleEl.innerText = "🌐 Network Request Details";
-
-        const contentEl = document.getElementById('stackContent');
-        if (contentEl) {
-            contentEl.innerText = rawText; // 使用 innerText 原样显示文本
-            if (state.modals.stack) state.modals.stack.show();
-        }
+        showNetworkDetails(data, data.response || null);
     }
 };

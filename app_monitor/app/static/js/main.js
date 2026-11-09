@@ -43,6 +43,7 @@ window.clearInfoLogs = UI.clearAllLogs;
 // [核心修复] 直接挂载 UI 模块的方法
 window.showStackTrace = UI.showStackTrace;
 window.showNetworkDetail = UI.showNetworkDetail;
+window.showNetworkDetailById = UI.showNetworkDetailById;
 
 // [辅助] 挂载行内展开 (如果你的UI还在用的话，虽然这里UI.js里用的是showStackTrace)
 window.toggleStackCell = (uid) => {
