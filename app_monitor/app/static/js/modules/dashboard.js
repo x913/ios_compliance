@@ -192,7 +192,9 @@ function updateWebView(data) {
     const entry = {
         timestamp: data.timestamp || new Date().toLocaleTimeString('en-GB', { hour12: false }),
         source: data.source || 'WebView navigation',
-        url: data.url || ''
+        url: data.url || '',
+        statusCode: data.status_code || '',
+        redirectTo: data.redirect_to || ''
     };
     stats.webview.unshift(entry);
     stats.webview = stats.webview.slice(0, 20);
@@ -208,12 +210,27 @@ function updateWebView(data) {
     const timestamp = document.createElement('span');
     timestamp.className = 'small text-muted font-monospace text-nowrap';
     timestamp.textContent = entry.timestamp;
+    meta.append(source, timestamp);
+    if (entry.statusCode) {
+        const status = document.createElement('span');
+        status.className = entry.statusCode.startsWith('3')
+            ? 'badge bg-warning text-dark ms-auto'
+            : 'badge bg-secondary ms-auto';
+        status.textContent = `HTTP ${entry.statusCode}`;
+        meta.append(status);
+    }
     const url = document.createElement('div');
     url.className = 'font-monospace small text-break';
     url.textContent = entry.url;
     url.title = entry.url;
-    meta.append(source, timestamp);
     item.append(meta, url);
+    if (entry.redirectTo) {
+        const redirect = document.createElement('div');
+        redirect.className = 'small font-monospace text-warning text-break mt-1';
+        redirect.textContent = `→ ${entry.redirectTo}`;
+        redirect.title = entry.redirectTo;
+        item.append(redirect);
+    }
 
     if (list.children.length === 1 && list.firstElementChild.classList.contains('text-center')) {
         list.innerHTML = '';

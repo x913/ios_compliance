@@ -7,7 +7,9 @@ function timestamp() {
 }
 
 function objectFromPointer(pointer) {
-    if (!pointer || pointer.isNull()) return null;
+    if (!pointer) return null;
+    if (pointer.handle) return pointer;
+    if (pointer.isNull && pointer.isNull()) return null;
     return new ObjC.Object(pointer);
 }
 
@@ -23,19 +25,38 @@ function urlFromObject(pointer, isRequest) {
     }
 }
 
+function urlFromResponse(pointer) {
+    try {
+        const response = objectFromPointer(pointer);
+        return response ? urlFromObject(response.URL(), false) : "";
+    } catch (_) {
+        return "";
+    }
+}
+
+function currentUrlFromWebView(pointer) {
+    try {
+        const webView = objectFromPointer(pointer);
+        return webView ? urlFromObject(webView.URL(), false) : "";
+    } catch (_) {
+        return "";
+    }
+}
+
 export function startWebViewHook() {
     console.log("[WebView Monitor] Loading WebView navigation hooks");
     let hookCount = 0;
     let retryCount = 0;
     const hookedMethods = new Set();
 
-    function sendNavigation(url, source) {
+    function sendNavigation(url, source, metadata = {}) {
         if (!url) return;
         send({
             type: "webview",
             timestamp: timestamp(),
             url,
-            source
+            source,
+            ...metadata
         });
     }
 
@@ -60,8 +81,54 @@ export function startWebViewHook() {
         return true;
     }
 
+    function hookNavigationDelegate(delegatePointer) {
+        const delegate = objectFromPointer(delegatePointer);
+        if (!delegate || !delegate.$className) return;
+
+        const className = delegate.$className;
+        hookMethod(className, "- webView:decidePolicyForNavigationAction:decisionHandler:", (args) => {
+            const action = objectFromPointer(args[3]);
+            const request = action ? action.request() : null;
+            sendNavigation(urlFromObject(request, true), "WKNavigationDelegate navigation action");
+        });
+        hookMethod(className, "- webView:decidePolicyForNavigationAction:preferences:decisionHandler:", (args) => {
+            const action = objectFromPointer(args[3]);
+            const request = action ? action.request() : null;
+            sendNavigation(urlFromObject(request, true), "WKNavigationDelegate navigation action");
+        });
+        hookMethod(className, "- webView:decidePolicyForNavigationResponse:decisionHandler:", (args) => {
+            const navigationResponse = objectFromPointer(args[3]);
+            const response = navigationResponse ? navigationResponse.response() : null;
+            if (!response) return;
+
+            let statusCode = null;
+            let redirectTo = "";
+            try {
+                if (response.isKindOfClass_(ObjC.classes.NSHTTPURLResponse)) {
+                    statusCode = response.statusCode().toString();
+                    const headers = response.allHeaderFields();
+                    const location = headers.objectForKey_("Location") || headers.objectForKey_("location");
+                    redirectTo = location ? location.toString() : "";
+                }
+            } catch (_) {}
+
+            sendNavigation(urlFromResponse(response), "WKNavigationDelegate navigation response", {
+                status_code: statusCode,
+                redirect_to: redirectTo
+            });
+        });
+        hookMethod(className, "- webView:didReceiveServerRedirectForProvisionalNavigation:", (args) => {
+            sendNavigation(currentUrlFromWebView(args[2]), "WKNavigationDelegate server redirect");
+        });
+    }
+
     function installAvailableHooks() {
+        hookMethod("WKWebView", "- setNavigationDelegate:", (args) => {
+            hookNavigationDelegate(args[2]);
+        });
         hookMethod("WKWebView", "- loadRequest:", (args) => {
+            const webView = objectFromPointer(args[0]);
+            if (webView && webView.navigationDelegate) hookNavigationDelegate(webView.navigationDelegate());
             sendNavigation(urlFromObject(args[2], true), "WKWebView loadRequest:");
         });
         hookMethod("WKWebView", "- loadHTMLString:baseURL:", (args) => {
