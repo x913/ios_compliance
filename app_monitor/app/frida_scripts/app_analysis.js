@@ -438,7 +438,7 @@ rpc.exports = {
         };
     },
 
-    read_file(relativePath) {
+    readFile(relativePath) {
         if (!ObjC.available) throw new Error("Objective-C runtime is not available in the target process");
         const bundlePath = text(ObjC.classes.NSBundle.mainBundle().bundlePath());
         return inspectBundleFile(bundlePath, relativePath);
