@@ -1,19 +1,22 @@
+import ObjC from "frida-objc-bridge";
+
 // =================================================================
 // 文件监控模块 (File Monitor) 
 // =================================================================
 
-function startFileHook() {
+export function startFileHook() {
     console.log("[File Monitor] 加载模块: File Monitor 模块");
+    let hookCount = 0;
     
     // 防止 ObjC 未定义导致脚本崩溃
     if (typeof ObjC === 'undefined') {
         console.log("[File Monitor] 错误: 当前环境找不到 ObjC 对象，无法监控文件操作。");
-        return;
+        return hookCount;
     }
 
     if (!ObjC.available) {
         console.log("[File Monitor] Objective-C Runtime 未加载，无法监控文件操作。");
-        return;
+        return hookCount;
     }
 
     // 发送文件操作日志的
@@ -63,6 +66,7 @@ function startFileHook() {
                         }
                     }
                 });
+                hookCount++;
             }
         }
     } catch(e) { console.error("[File Monitor] Hook NSFileHandle Error: " + e); }
@@ -89,6 +93,7 @@ function startFileHook() {
                         }
                     }
                 });
+                hookCount++;
             }
 
             // --- 复制文件 ---
@@ -108,6 +113,7 @@ function startFileHook() {
                         }
                     }
                 });
+                hookCount++;
             }
 
             // --- 删除文件 ---
@@ -125,6 +131,7 @@ function startFileHook() {
                         }
                     }
                 });
+                hookCount++;
             }
         }
     } catch(e) { console.error("[File Monitor] Hook NSFileManager Error: " + e); }
@@ -150,9 +157,11 @@ function startFileHook() {
                         }
                     }
                 });
+                hookCount++;
             }
         }
     } catch(e) { console.error("[File Monitor] Hook Plist Error: " + e); }
 
     console.log("[File Monitor] File Monitor 模块加载完成");
+    return hookCount;
 }

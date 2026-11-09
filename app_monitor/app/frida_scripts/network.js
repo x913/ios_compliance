@@ -1,9 +1,12 @@
+import ObjC from "frida-objc-bridge";
+
 // =================================================================
 // 网络监控模块 (Network Monitor) 
 // =================================================================
 
-function startNetworkHook() {
+export function startNetworkHook() {
     console.log("[Network Monitor] 加载模块: Network Monitor 模块");
+    let hookCount = 0;
     // 将NSData 转为 String
     function nsDataToString(data) {
         try {
@@ -147,8 +150,18 @@ function startNetworkHook() {
             var selectors = [
                 "- dataTaskWithRequest:",
                 "- dataTaskWithRequest:completionHandler:",
+                "- dataTaskWithRequest:uploadProgress:downloadProgress:completionHandler:",
                 "- dataTaskWithURL:",
-                "- dataTaskWithURL:completionHandler:"
+                "- dataTaskWithURL:completionHandler:",
+                "- uploadTaskWithRequest:fromData:",
+                "- uploadTaskWithRequest:fromData:completionHandler:",
+                "- uploadTaskWithStreamedRequest:",
+                "- downloadTaskWithRequest:",
+                "- downloadTaskWithRequest:completionHandler:",
+                "- downloadTaskWithURL:",
+                "- downloadTaskWithURL:completionHandler:",
+                "- webSocketTaskWithURL:",
+                "- webSocketTaskWithURL:protocols:"
             ];
 
             selectors.forEach(function(sel) {
@@ -170,8 +183,11 @@ function startNetworkHook() {
                             }
                         }
                     });
+                    hookCount++;
                 }
             });
         }
     } catch (e) { console.error("[Network] Hook 异常: " + e); }
+
+    return hookCount;
 }

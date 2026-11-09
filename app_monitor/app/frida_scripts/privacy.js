@@ -1,9 +1,12 @@
+import ObjC from "frida-objc-bridge";
+
 // =================================================================
 // iOS 隐私合规全量监控模块
 // =================================================================
 
-function startPrivacyHook() {
+export function startPrivacyHook() {
     console.log("[Privacy Monitor] 正在加载模块: Privacy Monitor 模块");
+    let hookCount = 0;
 
     const CONFIG = {
         enableStack: true,
@@ -44,10 +47,10 @@ function startPrivacyHook() {
     function safeHook(className, method, category, actionDesc, valueParser) {
         try {
             const clazz = ObjC.classes[className];
-            if (!clazz) return;
+            if (!clazz) return false;
             
             const targetMethod = clazz[method];
-            if (!targetMethod) return;
+            if (!targetMethod) return false;
 
             Interceptor.attach(targetMethod.implementation, {
                 onEnter: function(args) {
@@ -70,8 +73,10 @@ function startPrivacyHook() {
                     } catch (e) {}
                 }
             });
+            return true;
         } catch (e) {
             console.error(`[!] Hook Failed: ${className} ${method}`);
+            return false;
         }
     }
 
@@ -97,7 +102,7 @@ function startPrivacyHook() {
         ];
 
         locationTargets.forEach(t => {
-            safeHook(t.cls, t.m, "Location", t.cat, {
+            if (safeHook(t.cls, t.m, "Location", t.cat, {
                 onEnter: function(args) {
                     // 获取位置数据
                     if (t.m.includes("setDesiredAccuracy:")) return "Desired accuracy: " + args[2].toDouble();
@@ -107,7 +112,7 @@ function startPrivacyHook() {
                 onLeave: function(retval, enterInfo) {
                     return enterInfo || t.d;
                 }
-            });
+            })) hookCount++;
         });
 
 
@@ -124,11 +129,11 @@ function startPrivacyHook() {
         ];
 
         photoLibraryTargets.forEach(t => {
-            safeHook(t.cls, t.m, t.cat, t.d, {
+            if (safeHook(t.cls, t.m, t.cat, t.d, {
                 onLeave: function(retval) {
                     return t.content; // 直接返回 Tweak 中定义的中文描述
                 }
-            });
+            })) hookCount++;
         });
 
 
@@ -136,11 +141,14 @@ function startPrivacyHook() {
         const privacyTargets = [
             { cls: "CNContactStore", m: "- requestAccessForEntityType:completionHandler:", cat: "Contacts", d: "Request contacts access" },
             { cls: "AVCaptureDevice", m: "+ requestAccessForMediaType:completionHandler:", cat: "MediaDevice", d: "Request camera or microphone access" },
+            { cls: "ATTrackingManager", m: "+ requestTrackingAuthorizationWithCompletionHandler:", cat: "App Tracking Transparency", d: "Request ATT authorization" },
             { cls: "ASIdentifierManager", m: "- advertisingIdentifier", cat: "IDFA", d: "Read IDFA" },
             { cls: "UIDevice", m: "- identifierForVendor", cat: "IDFV", d: "Read IDFV" }
         ];
 
-        privacyTargets.forEach(t => safeHook(t.cls, t.m, t.cat, t.d));
+        privacyTargets.forEach(t => {
+            if (safeHook(t.cls, t.m, t.cat, t.d)) hookCount++;
+        });
 
         // 剪切板监控
         const pbMethods = [
@@ -155,7 +163,7 @@ function startPrivacyHook() {
         ["UIPasteboard", "_UIConcretePasteboard"].forEach(cls => {
             if (ObjC.classes[cls]) {
                 pbMethods.forEach(method => {
-                    safeHook(cls, method.m, "Pasteboard", method.d, {
+                    if (safeHook(cls, method.m, "Pasteboard", method.d, {
                         onLeave: function(retval) {
                             if (retval.isNull()) return "Empty";
                             try {
@@ -164,7 +172,7 @@ function startPrivacyHook() {
                                 return str.length > CONFIG.maxPasteboardLength ? str.substring(0, CONFIG.maxPasteboardLength) + "..." : str;
                             } catch (e) { return "Binary/Object Data"; }
                         }
-                    });
+                    })) hookCount++;
                 });
             }
         });
@@ -242,6 +250,7 @@ function startPrivacyHook() {
                         sendLog(this.context, f.cat, f.name, f.desc, detail);
                     }
                 });
+                hookCount++;
             }
         });
 
@@ -249,4 +258,6 @@ function startPrivacyHook() {
     } else {
         console.error("[Privacy Monitor] ObjC Runtime 不可用");
     }
+
+    return hookCount;
 }

@@ -2,7 +2,7 @@
 // 反调试绕过模块 (Anti-Anti-Debug)
 // =================================================================
 
-function bypassAntiDebug() {
+export function bypassAntiDebug() {
     console.log("[Anti-Anti-Debug] 加载模块: Anti-Debug Bypass");
     // 绕过 ptrace PT_DENY_ATTACH
     const ptracePtr = Module.findGlobalExportByName("ptrace");
@@ -40,6 +40,3 @@ function bypassAntiDebug() {
     
     console.log("[Anti-Anti-Debug] 反调试防护已激活");
 }
-
-// 立即执行
-bypassAntiDebug();

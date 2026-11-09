@@ -1,5 +1,6 @@
 **/.DS_Store
 .vscode/
 __pycache__/
+app_monitor/node_modules/
 tweak_monitor/.theos/
 tweak_monitor/packages/

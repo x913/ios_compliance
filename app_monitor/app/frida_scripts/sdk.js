@@ -1,8 +1,11 @@
+import ObjC from "frida-objc-bridge";
+import bundledSdkRules from "./ios_sdk_rules.json";
+
 // =================================================================
 // SDK 检测模块
 // =================================================================
 
-function startSDKCheck() {
+export function startSDKCheck() {
     console.log("[SDK] 加载模块: Check-SDK");
 
     if (!ObjC.available) {
@@ -10,14 +13,8 @@ function startSDKCheck() {
         return;
     }
 
-    // 1. 安全获取规则
-    var sdkDatabase = [];
-    try {
-        // 将使用SDK特征 会替换这个字符串。
-        sdkDatabase = __SDK_RULES_JSON__; 
-    } catch (e) {
-        console.error("[SDK] 获取SDK检测规则失败。错误: " + e);
-    }
+    // The JSON rules are bundled with the agent at build time.
+    var sdkDatabase = bundledSdkRules;
 
     // 2. 如果规则为空或未定义，使用兜底规则进行测试
     if (!sdkDatabase || !Array.isArray(sdkDatabase) || sdkDatabase.length === 0) {

@@ -19,43 +19,16 @@ class MonitorService:
 
     @staticmethod
     def _load_js_source():
-        """读取并拼接所有的 JS 模块文件，并注入 SDK 规则"""
-        files_order = ['bypass.js', 'network.js', 'file.js', 'privacy.js', 'antilock.js', 'sdk.js', 'loader.js']
-        
-        # 获取 frida_scripts 目录路径
-        base_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frida_scripts')
-        full_source = ""
-        
+        """Bundle the Frida agent and its explicit Objective-C bridge dependency."""
+        scripts_dir = Path(__file__).resolve().parent.parent / 'frida_scripts'
+        entrypoint = scripts_dir / 'loader.js'
         try:
-            # 拼接所有 JS 文件
-            for filename in files_order:
-                file_path = os.path.join(base_path, filename)
-                if os.path.exists(file_path):
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        full_source += f"\n// --- FILE: {filename} ---\n"
-                        full_source += f.read() + "\n"
-                else:
-                    print(f"[!] Warning: JS Module not found: {filename}")
-
-            # 读取 SDK 规则 JSON 文件
-            rules_path = os.path.join(base_path, 'ios_sdk_rules.json')
-            rules_content = "[]" # 默认空数组，防止文件不存在导致 JS 语法错误
-            
-            if os.path.exists(rules_path):
-                with open(rules_path, 'r', encoding='utf-8') as f:
-                    # 读取内容，去掉可能的换行符，保证是合法的 JSON 字符串
-                    rules_content = f.read().strip()
-            else:
-                print("[!] Warning: ios_sdk_rules.json not found")
-
-            # 使用SDK特征规则替换 JS 中的占位符
-            full_source = full_source.replace('__SDK_RULES_JSON__', rules_content)
-
+            if not entrypoint.is_file():
+                raise FileNotFoundError(f"Agent entrypoint not found: {entrypoint}")
+            return frida.Compiler().build(str(entrypoint))
         except Exception as e:
-            print(f"[!] JS Loading Error: {e}")
+            logger.error("Frida agent build failed: %s", e)
             return None
-            
-        return full_source
 
     @classmethod
     def _get_process(cls, device, bundle_id):
@@ -101,6 +74,39 @@ class MonitorService:
                 if i == max_retries - 1: raise e
                 logger.warning(f"Attach failed ({i + 1}/{max_retries}); retrying in 1 second: {e}")
                 time.sleep(1)
+
+    @classmethod
+    def _wait_for_hook_setup(cls, timeout_seconds):
+        """Wait until the injected loader confirms that hook setup completed."""
+        deadline = time.monotonic() + timeout_seconds
+        last_status = None
+
+        while time.monotonic() < deadline:
+            last_status = cls.script.exports_sync.check_status()
+            if last_status.get("hooks_loaded"):
+                logger.info("Frida hooks ready: %s", last_status.get("modules", {}))
+                return last_status
+            time.sleep(0.1)
+
+        return None
+
+    @staticmethod
+    def _require_monitoring_hooks(status):
+        """Reject a session where the loader ran but no monitor hooks attached."""
+        required_modules = ("Network Monitor", "File Monitor", "Privacy Monitor")
+        modules = status.get("modules", {})
+        unavailable = [
+            name
+            for name in required_modules
+            if not modules.get(name, {}).get("started")
+            or not modules.get(name, {}).get("hooks", 0)
+        ]
+        if unavailable:
+            raise RuntimeError(
+                "Frida loader completed without active hooks in: "
+                + ", ".join(unavailable)
+                + f" (status: {status})"
+            )
 
     @classmethod
     def _on_message(cls, message, data):
@@ -149,10 +155,21 @@ class MonitorService:
             cls.script.on('message', cls._on_message)
             cls.script.load()
 
+            # On a normal iOS app the ObjC runtime is ready here, so hooks are
+            # installed before resume. Keep a fallback for unusually early
+            # spawn points where ObjC becomes available only after resume.
+            hook_status = cls._wait_for_hook_setup(timeout_seconds=1)
+
             # Resume only processes spawned by this service. Existing app
             # processes were already running when hooks were loaded.
             if cls.spawned:
                 device.resume(cls.pid)
+
+            if hook_status is None:
+                hook_status = cls._wait_for_hook_setup(timeout_seconds=5)
+            if hook_status is None:
+                raise RuntimeError("Frida loader did not confirm hook installation within 5 seconds")
+            cls._require_monitoring_hooks(hook_status)
 
             msg = f"Monitoring started successfully (PID: {cls.pid})"
             socketio.emit('sys_log', {'msg': msg})

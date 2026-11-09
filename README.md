@@ -92,11 +92,12 @@
 ## 🚀 快速开始 (Frida 模式)
 
 ### 1. 安装依赖
-在项目根目录下运行：
+在 `app_monitor` 目录下运行：
 ```bash
 pip install -r requirements.txt
+npm ci
 ```
-(注：项目锁定 Frida 版本为 17.26.2；越狱 iPhone 上也应安装相同版本。)
+(注：项目锁定 Frida 版本为 17.26.2；越狱 iPhone 上也应安装相同版本。`npm ci` 会安装 Frida 17 所需的 Objective-C bridge，用于构建注入脚本。)
 ### 2. 启动服务
 确保手机通过 USB 连接电脑，并已信任电脑。
 ```bash

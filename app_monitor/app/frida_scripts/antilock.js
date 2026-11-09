@@ -1,9 +1,11 @@
+import ObjC from "frida-objc-bridge";
+
 // =================================================================
 // 防锁屏模块 (Anti-Lock)
 // 设置 UIApplication.idleTimerDisabled = YES
 // =================================================================
 
-function startAntiLock() {
+export function startAntiLock() {
     console.log("[Anti-Lock] 加载模块: Anti-Lock");
     if (!ObjC.available) return;
 

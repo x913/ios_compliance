@@ -1,3 +1,11 @@
+import ObjC from "frida-objc-bridge";
+import { bypassAntiDebug } from "./bypass.js";
+import { startAntiLock } from "./antilock.js";
+import { startNetworkHook } from "./network.js";
+import { startFileHook } from "./file.js";
+import { startPrivacyHook } from "./privacy.js";
+import { startSDKCheck } from "./sdk.js";
+
 // =================================================================
 // 监控模块加载 (Monitor loader) - 修复版
 // =================================================================
@@ -5,13 +13,17 @@
 // 全局环境与状态
 const _global = typeof globalThis !== 'undefined' ? globalThis : (0, eval)("this");
 _global.hooksLoaded = false;
+_global.hookStatus = { modules: {} };
+
+bypassAntiDebug();
 
 // RPC 导出
 rpc.exports = {
     checkStatus: function() {
         return {
             objc: ObjC.available,
-            hooks_loaded: _global.hooksLoaded
+            hooks_loaded: _global.hooksLoaded,
+            modules: _global.hookStatus.modules
         };
     }
 };
@@ -40,26 +52,37 @@ rpc.exports = {
 
         // 定义需要加载的模块名称和对应的入口函数
         const modules = [
-            { name: "Keep Screen Awake", fn: "startAntiLock" },
-            { name: "Network Monitor", fn: "startNetworkHook" },
-            { name: "File Monitor", fn: "startFileHook" },
-            { name: "Privacy Monitor", fn: "startPrivacyHook" },
+            { name: "Keep Screen Awake", fn: startAntiLock },
+            { name: "Network Monitor", fn: startNetworkHook },
+            { name: "File Monitor", fn: startFileHook },
+            { name: "Privacy Monitor", fn: startPrivacyHook },
             // [核心修改] 添加 SDK 检测模块入口
-            { name: "SDK Detection", fn: "startSDKCheck" }
+            { name: "SDK Detection", fn: startSDKCheck }
         ];
 
         let successCount = 0;
         modules.forEach(mod => {
-            const fn = _global[mod.fn];
-            if (typeof fn === 'function') {
+            if (typeof mod.fn === 'function') {
                 try {
-                    fn(); // 调用模块启动函数
+                    const hookCount = mod.fn();
+                    _global.hookStatus.modules[mod.name] = {
+                        started: true,
+                        hooks: Number.isInteger(hookCount) ? hookCount : null
+                    };
                     console.log(`[Loader] ${mod.name} 模块已启动`);
                     successCount++;
                 } catch (e) {
+                    _global.hookStatus.modules[mod.name] = {
+                        started: false,
+                        error: e.message
+                    };
                     console.error(`[-] ${mod.name} 加载失败: ${e.message}`);
                 }
             } else {
+                _global.hookStatus.modules[mod.name] = {
+                    started: false,
+                    error: "entry point not found"
+                };
                 // 可选：打印警告，方便排查哪个函数没定义
                 // console.warn(`[Loader] 未找到函数: ${mod.fn} (可能是对应脚本文件未加载)`);
             }
@@ -67,6 +90,15 @@ rpc.exports = {
 
         _global.hooksLoaded = true;
         send({ type: "sys_log", payload: { msg: `Hooks active (${successCount}/${modules.length} modules loaded)` } });
+        send({
+            type: "info",
+            category: "System",
+            timestamp: new Date().toISOString(),
+            func: "Frida Loader",
+            method: "Hook installation",
+            content: `Hooks active: ${successCount}/${modules.length} modules loaded`,
+            stack: ""
+        });
         console.log("==========================================");
     }
 
@@ -115,12 +147,17 @@ rpc.exports = {
             setTimeout(loop, CFG.pollInterval);
         }
         
-        // 立即开始
-        setupDlopenMonitor();
         loop();
     }
 
-    // 启动
-    setImmediate(startPolling);
+    // Install hooks synchronously whenever ObjC is already available. This
+    // happens before Python resumes a spawned app, so launch-time activity is
+    // observable. Poll only for processes where ObjC is not ready yet.
+    if (isObjCReady()) {
+        performHooks();
+    } else {
+        setupDlopenMonitor();
+        startPolling();
+    }
 
 })();
