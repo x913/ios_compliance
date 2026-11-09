@@ -13,6 +13,19 @@ function escapeHtml(value) {
         .replace(/'/g, '&#039;');
 }
 
+function formatBytes(bytes) {
+    const value = Number(bytes) || 0;
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let unitIndex = 0;
+    let displayValue = value;
+    while (displayValue >= 1024 && unitIndex < units.length - 1) {
+        displayValue /= 1024;
+        unitIndex += 1;
+    }
+    const precision = unitIndex === 0 ? 0 : displayValue >= 100 ? 0 : 1;
+    return `${displayValue.toFixed(precision)} ${units[unitIndex]}`;
+}
+
 function setButtonLoading(button, loading, label) {
     if (!button) return;
     button.disabled = loading;
@@ -49,6 +62,45 @@ function renderList(elementId, entries, emptyText) {
     )).join('');
 }
 
+function renderFileInventory(inventory) {
+    const data = inventory || {};
+    const count = Number(data.file_count) || 0;
+    const countBadge = document.getElementById('fileInventoryCount');
+    const note = document.getElementById('fileInventoryNote');
+    if (countBadge) countBadge.textContent = `${count.toLocaleString()} files`;
+    if (note) {
+        const indexed = Number(data.indexed_file_count) || 0;
+        note.textContent = data.error || `Showing ${indexed.toLocaleString()} of ${count.toLocaleString()} files alphabetically.`;
+    }
+
+    const largestBody = document.getElementById('largestFilesBody');
+    if (largestBody) {
+        const largestFiles = data.largest_files || [];
+        largestBody.innerHTML = largestFiles.length > 0
+            ? largestFiles.map((file) => `<tr>
+                <td class="font-monospace small text-break">${escapeHtml(file.path)}</td>
+                <td class="text-end text-nowrap">${formatBytes(file.size)}</td>
+            </tr>`).join('')
+            : '<tr><td colspan="2" class="text-center text-muted py-3">No files found</td></tr>';
+    }
+
+    const indexBody = document.getElementById('fileInventoryBody');
+    if (indexBody) {
+        const files = data.files || [];
+        indexBody.innerHTML = files.length > 0
+            ? files.map((file) => `<tr>
+                <td class="font-monospace small text-break">${escapeHtml(file.path)}</td>
+                <td><span class="badge bg-light text-dark border text-capitalize">${escapeHtml(file.category)}</span></td>
+                <td class="text-end text-nowrap">${formatBytes(file.size)}</td>
+            </tr>`).join('')
+            : '<tr><td colspan="3" class="text-center text-muted py-3">No files found</td></tr>';
+    }
+
+    const technologyFiles = (data.technology_files || []).map((file) => `${file.path} — ${formatBytes(file.size)}`);
+    renderList('technologyFileList', technologyFiles, 'No technology-specific file markers found');
+    renderList('topLevelFileList', data.top_level_entries, 'No top-level entries found');
+}
+
 function renderAnalysis(data) {
     const results = document.getElementById('analysisResults');
     const placeholder = document.getElementById('analysisPlaceholder');
@@ -74,6 +126,8 @@ function renderAnalysis(data) {
 
     const inspection = data.inspection || {};
     const app = data.app || {};
+    const inventory = inspection.file_inventory || {};
+    const breakdown = inventory.size_breakdown || {};
     const summary = document.getElementById('inspectionSummary');
     if (summary) {
         const fields = [
@@ -81,6 +135,12 @@ function renderAnalysis(data) {
             ['Bundle ID', app.bundle_id],
             ['Version', app.version],
             ['Build', app.build],
+            ['Bundle size (on device)', formatBytes(inventory.total_bytes)],
+            ['Files', Number(inventory.file_count || 0).toLocaleString()],
+            ['Main executable', formatBytes(breakdown.executable)],
+            ['Embedded frameworks', formatBytes(breakdown.frameworks)],
+            ['App extensions', formatBytes(breakdown.extensions)],
+            ['Resources and metadata', formatBytes(breakdown.resources)],
             ['Bundle path', inspection.bundle_path],
             ['Executable path', inspection.executable_path]
         ];
@@ -91,6 +151,7 @@ function renderAnalysis(data) {
 
     renderList('frameworkList', inspection.embedded_frameworks, 'No embedded frameworks found');
     renderList('extensionList', inspection.app_extensions, 'No app extensions found');
+    renderFileInventory(inventory);
 
     const moduleBody = document.getElementById('moduleBody');
     if (moduleBody) {

@@ -180,6 +180,37 @@
                                 <table class="table table-sm table-hover mb-0"><thead class="table-light sticky-top"><tr><th>Module</th><th>Path</th></tr></thead><tbody id="moduleBody"></tbody></table>
                             </div>
                         </div>
+
+                        <div class="card shadow-sm border-0 mb-3">
+                            <div class="card-header bg-white border-0 pt-3 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-1"><i class="bi bi-folder2-open me-2"></i>File Inventory</h5>
+                                    <small id="fileInventoryNote" class="text-muted">Waiting for analysis...</small>
+                                </div>
+                                <span id="fileInventoryCount" class="badge bg-primary">0 files</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-lg-6">
+                                        <h6>Largest Files</h6>
+                                        <div class="table-responsive border rounded" style="max-height: 280px;">
+                                            <table class="table table-sm table-hover mb-0"><thead class="table-light sticky-top"><tr><th>Path</th><th class="text-end">Size</th></tr></thead><tbody id="largestFilesBody"></tbody></table>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <h6>Technology Markers</h6>
+                                        <ul id="technologyFileList" class="list-group border rounded" style="max-height: 280px; overflow: auto;"></ul>
+                                    </div>
+                                    <div class="col-lg-3">
+                                        <h6>Top-level Entries</h6>
+                                        <ul id="topLevelFileList" class="list-group border rounded" style="max-height: 280px; overflow: auto;"></ul>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="table-responsive border-top" style="max-height: 420px;">
+                                <table class="table table-sm table-hover mb-0"><thead class="table-light sticky-top"><tr><th>Bundle-relative path</th><th>Category</th><th class="text-end">Size</th></tr></thead><tbody id="fileInventoryBody"></tbody></table>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="card shadow-sm border-0 mb-3">
