@@ -118,6 +118,7 @@ class MonitorService:
             event_map = {
                 'network': 'network_log',
                 'network_response': 'network_response_log',
+                'webview': 'webview_log',
                 'file': 'file_log',
                 'info': 'info_log',
                 'sdk': 'sdk_log',

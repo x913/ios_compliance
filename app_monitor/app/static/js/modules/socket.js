@@ -34,6 +34,11 @@ export const SocketClient = {
                 if (UI && UI.renderNetworkResponse) UI.renderNetworkResponse(data);
             });
 
+            socket.on('webview_log', (data) => {
+                console.log("[Debug] WebView navigation:", data);
+                Dashboard.updateWebView(data);
+            });
+
             socket.on('file_log', (data) => {
                 console.log("[Debug] File Data:", data);
                 if (UI && UI.renderFileLog) UI.renderFileLog(data);

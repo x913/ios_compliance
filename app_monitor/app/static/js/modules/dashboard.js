@@ -5,6 +5,7 @@
 const stats = {
     privacy: {},   
     domains: {},   
+    webview: [],
     total: { privacy: 0, network: 0, file: 0 }
 };
 
@@ -118,6 +119,17 @@ function init() {
             }
         });
     }
+
+    renderEmptyWebViewState();
+}
+
+function renderEmptyWebViewState() {
+    const list = document.getElementById('webviewUrlList');
+    const count = document.getElementById('webview-count');
+    if (count) count.innerText = '0 captured';
+    if (list) {
+        list.innerHTML = '<li class="list-group-item text-center text-muted small py-4">No WebView navigation captured yet</li>';
+    }
 }
 
 // 更新隐私统计
@@ -172,10 +184,50 @@ function updateFile() {
     if(el) el.innerText = stats.total.file;
 }
 
+function updateWebView(data) {
+    const list = document.getElementById('webviewUrlList');
+    const count = document.getElementById('webview-count');
+    if (!list) return;
+
+    const entry = {
+        timestamp: data.timestamp || new Date().toLocaleTimeString('en-GB', { hour12: false }),
+        source: data.source || 'WebView navigation',
+        url: data.url || ''
+    };
+    stats.webview.unshift(entry);
+    stats.webview = stats.webview.slice(0, 20);
+
+    const item = document.createElement('li');
+    item.className = 'list-group-item py-2';
+    const meta = document.createElement('div');
+    meta.className = 'd-flex justify-content-between align-items-center gap-2 mb-1';
+    const source = document.createElement('span');
+    source.className = 'badge bg-info text-dark text-truncate';
+    source.textContent = entry.source;
+    source.title = entry.source;
+    const timestamp = document.createElement('span');
+    timestamp.className = 'small text-muted font-monospace text-nowrap';
+    timestamp.textContent = entry.timestamp;
+    const url = document.createElement('div');
+    url.className = 'font-monospace small text-break';
+    url.textContent = entry.url;
+    url.title = entry.url;
+    meta.append(source, timestamp);
+    item.append(meta, url);
+
+    if (list.children.length === 1 && list.firstElementChild.classList.contains('text-center')) {
+        list.innerHTML = '';
+    }
+    list.prepend(item);
+    while (list.children.length > 20) list.lastElementChild.remove();
+    if (count) count.innerText = `${stats.webview.length} captured`;
+}
+
 // 清空统计
 function clear() {
     stats.privacy = {};
     stats.domains = {};
+    stats.webview = [];
     stats.total = { privacy: 0, network: 0, file: 0 };
     
     ['count-privacy', 'count-network', 'count-file'].forEach(id => {
@@ -193,6 +245,7 @@ function clear() {
         charts.network.data.datasets[0].data = [];
         charts.network.update();
     }
+    renderEmptyWebViewState();
 }
 
 export const Dashboard = {
@@ -200,5 +253,6 @@ export const Dashboard = {
     updatePrivacy,
     updateNetwork,
     updateFile,
+    updateWebView,
     clear
 };

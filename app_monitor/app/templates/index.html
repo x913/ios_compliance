@@ -407,6 +407,19 @@
                             </div>
                         </div>
 
+                        <div class="col-lg-6">
+                            <div class="card shadow-sm border-0 h-100">
+                                <div class="card-header bg-white border-0 pt-3 ps-3 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="card-title text-info fw-bold mb-1"><i class="bi bi-window-stack me-2"></i>WebView Navigation</h5>
+                                        <small class="text-muted">URLs handed to WKWebView or UIWebView load APIs</small>
+                                    </div>
+                                    <span id="webview-count" class="badge bg-info text-dark">0 captured</span>
+                                </div>
+                                <ul id="webviewUrlList" class="list-group list-group-flush" style="max-height: 280px; overflow-y: auto;"></ul>
+                            </div>
+                        </div>
+
 
                         <!-- 4. SDK 检测结果卡片 -->
                         <div class="col-md-12">

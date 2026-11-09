@@ -120,6 +120,8 @@ def report_log():
         socketio.emit('network_log', data)
     elif msg_type == 'network_response':
         socketio.emit('network_response_log', data)
+    elif msg_type == 'webview':
+        socketio.emit('webview_log', data)
     elif msg_type == 'file':
         socketio.emit('file_log', data)
     elif msg_type == 'info':

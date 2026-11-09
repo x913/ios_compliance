@@ -5,6 +5,7 @@ import { startNetworkHook } from "./network.js";
 import { startFileHook } from "./file.js";
 import { startPrivacyHook } from "./privacy.js";
 import { startSDKCheck } from "./sdk.js";
+import { startWebViewHook } from "./webview.js";
 
 // =================================================================
 // 监控模块加载 (Monitor loader) - 修复版
@@ -56,6 +57,7 @@ rpc.exports = {
             { name: "Network Monitor", fn: startNetworkHook },
             { name: "File Monitor", fn: startFileHook },
             { name: "Privacy Monitor", fn: startPrivacyHook },
+            { name: "WebView Monitor", fn: startWebViewHook },
             // [核心修改] 添加 SDK 检测模块入口
             { name: "SDK Detection", fn: startSDKCheck }
         ];
